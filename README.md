@@ -26,25 +26,25 @@ npm run preview
 
 ## Controls
 
-| Control | Behavior |
-| --- | --- |
-| Space / play button | Play or pause |
-| Timeline / ← and → | Scrub / seek 10 seconds |
-| Lap input / [ and ] | Jump to a driver's lap |
-| Driver list | Follow any of the 20 entrants |
-| Camera buttons / 1–5 / C | Aerial, chase, onboard, driver close-up, trackside |
-| Trackside selector | Eight fixed stations, or an automatic director |
-| Drag / scroll in aerial view | Orbit / zoom; right-drag to pan |
-| Speed selector | 0.25× through 64× playback |
-| F / fullscreen button | Fullscreen with playback controls |
-| Settings | Lower resolution and disable shadows |
+| Control                      | Behavior                                           |
+| ---------------------------- | -------------------------------------------------- |
+| Space / play button          | Play or pause                                      |
+| Timeline / ← and →           | Scrub / seek 10 seconds                            |
+| Lap input / [ and ]          | Jump to a driver's lap                             |
+| Driver list                  | Follow any of the 20 entrants                      |
+| Camera buttons / 1–5 / C     | Aerial, chase, onboard, driver close-up, trackside |
+| Trackside selector           | Eight fixed stations, or an automatic director     |
+| Drag / scroll in aerial view | Orbit / zoom; right-drag to pan                    |
+| Speed selector               | 0.25× through 64× playback                         |
+| F / fullscreen button        | Fullscreen with playback controls                  |
+| Settings                     | Lower resolution and disable shadows               |
 
 The standings, gaps, tyre compound, throttle/brake indicators, selected driver's speed and mini map follow the replay time. Retirements remain visible in the order; select another driver to continue following the race.
 
 ## Architecture and performance
 
 - **Rust → WebAssembly:** the complete sample buffer lives in WASM memory. Each frame runs binary searches and interpolation for every driver, without allocations. Random and backwards seeks work independently of previous frames. There is no Rust build service or backend requirement at runtime.
-- **Three.js / WebGL:** the renderer consumes one fixed 16-float record per driver. Seven instanced geometry layers draw all 20 cars; trees and clouds are also instanced and static scenery is merged by material. The canvas stops drawing when playback and the camera are still. Pixel ratio is capped, with an optional performance mode.
+- **Three.js / WebGL:** the renderer consumes one fixed 16-float record per driver. Seven instanced geometry layers draw nearby cars; distant cars use simplified models. Static shadows render once and moving cars use lightweight contact shadows; trees and clouds are also instanced and static scenery is merged by material. The canvas stops drawing when playback and the camera are still. Pixel ratio is capped and automatically reduces when frames are slow, with an optional performance mode.
 - **Compact data:** native gzip exports transfer about 6.9 MB of telemetry and metadata. The loader supports both HTTP gzip decoding and explicit browser decompression. WASM is approximately 24 KB.
 - **Turso:** raw API responses and chunked export assets are stored in a persistent local Turso development database at `.cache/openf1/turso-replays.db`. The installed CLI was signed out, so this database is **not synced to Turso Cloud**. The hosted POC uses immutable exports and needs no database credentials. See [the data pipeline](docs/data-pipeline.md) to reproduce acquisition or re-export the data.
 

@@ -11,6 +11,14 @@
     "test": "cargo test --manifest-path engine/Cargo.toml && node scripts/test-engine.mjs",
     "test:browser": "node scripts/test-browser.mjs"
   },
-  "dependencies": { "three": "^0.180.0", "lucide": "^0.468.0" },
-  "devDependencies": { "@types/three": "^0.180.0", "typescript": "^5.9.3", "vite": "^7.1.9", "@playwright/test": "^1.56.0" }
+  "dependencies": {
+    "three": "^0.180.0",
+    "lucide": "^0.468.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9",
+    "@playwright/test": "^1.56.0"
+  }
 }
