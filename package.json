@@ -1,0 +1,16 @@
+{
+  "name": "formula-mii",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build": "npm run build:wasm && tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "cargo test --manifest-path engine/Cargo.toml && node scripts/test-engine.mjs",
+    "test:browser": "node scripts/test-browser.mjs"
+  },
+  "dependencies": { "three": "^0.180.0", "lucide": "^0.468.0" },
+  "devDependencies": { "@types/three": "^0.180.0", "typescript": "^5.9.3", "vite": "^7.1.9", "@playwright/test": "^1.56.0" }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+engine/target/
+.cache/
+.env*
+*.db
+*.db-shm
+*.db-wal
+artifacts/
+__pycache__/
+*.pyc
+.openai/workflow-state.json
