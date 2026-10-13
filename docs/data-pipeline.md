@@ -35,22 +35,33 @@ The buffer is little-endian interleaved Float32, with 12 values per record:
 
 `metadata.json.gz` is also available, reducing transfer of the lap and interval histories. The original raw response store contains occasional out-of-range pedal values (104) and an invalid gear (57). The export bounds throttle/brake to 0–100 and substitutes neutral (0) for invalid gear values; quality metadata records the anomaly counts. Recorded locations, times, speed and classifications remain source data.
 
-| Index | Value | Unit |
-| --- | --- | --- |
-| 0 | Time from race start | seconds |
-| 1 | Normalized x | metres, horizontal |
-| 2 | Normalized y | metres, horizontal |
-| 3 | Normalized z | metres, elevation |
-| 4 | Speed | km/h |
-| 5 | Throttle | source percentage |
-| 6 | Brake | source 0 or 100 |
-| 7 | Gear | 0–8 |
-| 8 | RPM | revolutions/minute |
-| 9 | DRS | source status code |
-| 10 | Race position | 1–20 |
-| 11 | Current lap | 1–71 |
+| Index | Value                | Unit               |
+| ----- | -------------------- | ------------------ |
+| 0     | Time from race start | seconds            |
+| 1     | Normalized x         | metres, horizontal |
+| 2     | Normalized y         | metres, horizontal |
+| 3     | Normalized z         | metres, elevation  |
+| 4     | Speed                | km/h               |
+| 5     | Throttle             | source percentage  |
+| 6     | Brake                | source 0 or 100    |
+| 7     | Gear                 | 0–8                |
+| 8     | RPM                  | revolutions/minute |
+| 9     | DRS                  | source status code |
+| 10    | Race position        | 1–20               |
+| 11    | Current lap          | 1–71               |
 
-Drivers occupy contiguous blocks. `drivers[].offset` is an offset in **floats**, so the byte offset is `offset * 4`; `count` is the record count. The normalized point is `(raw - origin) * 0.1`, preserving the source coordinate directions. The 3D scene maps source x to world x, source y to world z, and preserves source z in the engine; this POC flattens scene elevation to a stylized diorama. The track route is an actual fast non-pit lap, in the same normalized coordinates. `metadata.json` includes the origin, bounds, route points, driver blocks, timing events, intervals, tyre stints, weather, pit records, race-control messages and final results.
+Drivers occupy contiguous blocks. `drivers[].offset` is an offset in **floats**, so the byte offset is `offset * 4`; `count` is the record count. The normalized point is `(raw - origin) * 0.1`, preserving the source coordinate directions. Source x and y are metres east and north. The 3D scene is y-up and right-handed, so it maps source x to world x, source y to world −z and source z to elevation; mapping y to +z would mirror the circuit. The track route is an actual fast non-pit lap, in the same normalized coordinates. `metadata.json` includes the origin, bounds, route points, driver blocks, timing events, intervals, tyre stints, weather, pit records, race-control messages and final results.
+
+## Venue
+
+`public/replay/venue.json` (and its gzip twin) holds Interlagos and its surroundings in the same replay coordinates. `scripts/venue_ingest.py` downloads OpenStreetMap map data around the circuit through the [OSM API](https://wiki.openstreetmap.org/wiki/API_v0.6) in nine tiles, below the API's 50,000-node limit, and caches them in the ignored `.cache/osm/`. It chains the circuit relation ([Wikidata Q171387](https://www.wikidata.org/wiki/Q171387)) into a lap and fits it to the reference lap with a rigid rotation and translation, searching start point, direction and mirroring. The current fit is 6.9 m RMS with no mirroring, and the mapped lap is 4,313 m against the official 4,309 m. The script exports the named corners as distances along the lap, the pit lane (entry first), the venue boundary, grandstands, buildings as oriented rectangles, lakes, woods, grass, parking, streets, the karting track and mapped trees.
+
+```sh
+python3 scripts/venue_ingest.py            # reads the cache once it exists
+python3 scripts/venue_ingest.py --refresh  # refetches OpenStreetMap
+```
+
+Map data is © OpenStreetMap contributors and available under the [Open Database License](https://www.openstreetmap.org/copyright); the exported `venue.json` is a derivative database under the same licence.
 
 ## Source limits
 

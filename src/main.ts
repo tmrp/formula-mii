@@ -25,6 +25,7 @@ import {
 import { ReplayEngine } from "./engine";
 import { ReplayScene } from "./scene";
 import { miiPortraits } from "./mii";
+import { EMPTY_VENUE, type Venue } from "./venue";
 import {
   bottomBar,
   installMenuSounds,
@@ -116,7 +117,7 @@ app.innerHTML = `
       </div>
       <div class="station-wrap" hidden><label for="station">Trackside camera</label><select id="station"><option value="-1">Auto director</option></select><span id="station-name"></span></div>
      </div>
-     <div class="scene-instruction" id="camera-instruction">${icon("scan")} Drag to explore <span>·</span> Scroll to zoom</div>
+     <div class="scene-instruction" id="camera-instruction">${icon("scan")} Drag to explore <span>·</span> <em>Scroll to zoom</em></div>
      <div class="track-sign"><span>Interlagos</span><strong>São Paulo, Brasil</strong></div>
      <div class="focus-card" id="focus-card"><div class="avatar" id="avatar"></div><div class="focus-identity"><span class="focus-label">FOLLOWING <span id="focus-number">#4</span></span><strong id="focus-name">Lando Norris</strong><span id="focus-team">McLaren</span></div><div class="focus-divider"></div><div class="speed"><strong id="speed" class="lcd-value"></strong><span>KM/H</span></div><div class="gear"><span>GEAR</span><strong id="gear">N</strong></div><div class="telemetry-bars"><span>THR <i><b id="throttle"></b></i></span><span>BRK <i><b id="brake"></b></i></span></div><span class="tire-chip" id="tire">M</span></div>
      <div class="minimap-wrap"><canvas id="minimap" width="360" height="240" aria-label="Track map with live driver positions"></canvas><span>TRACK MAP</span></div>
@@ -193,7 +194,7 @@ el("dialog").onclick = (e) => {
 el("about-button").onclick = () =>
   showDialog(
     "A real race in a little world.",
-    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. Track elevation and scenery are stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p class="muted">Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
+    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. The track climbs and falls with its recorded elevation. The pit lane, lake, buildings, streets and grandstand sites come from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>, fitted to the telemetry, and the stands are full of Mii fans. Scenery is still stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p class="muted">Map data © OpenStreetMap contributors, available under the ODbL. Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
   );
 el("help-button").onclick = () =>
   showDialog(
@@ -302,12 +303,12 @@ function setCamera(m: CameraMode) {
   });
   el("camera-instruction").innerHTML =
     m === "orbit"
-      ? `${icon("scan")} Drag to explore <span>·</span> Scroll to zoom`
+      ? `${icon("scan")} Drag to explore <span>·</span> <em>Scroll to zoom</em>`
       : m === "trackside"
         ? `${icon("video")} Trackside cameras follow your selected driver`
         : m === "portrait"
           ? `${icon("user-round")} Say hello to your Mii`
-          : `${icon("navigation")} Following ${esc(meta?.drivers[focus].name_acronym ?? "driver")} <span>·</span> Pick another Mii in the race order`;
+          : `${icon("navigation")} Following ${esc(meta?.drivers[focus].name_acronym ?? "driver")} <span>·</span> <em>Pick another Mii in the race order</em>`;
   document.querySelector<HTMLElement>(".station-wrap")!.hidden =
     m !== "trackside";
   icons();
@@ -501,27 +502,28 @@ function updateUI() {
     carPosition: [frame[k], frame[k + 1]],
     visible: scene.cars.filter((c) => c.visible).length,
     portraits: portraits.filter(Boolean).length,
+    spectators: scene.spectators,
   };
 }
 
 let mapPoints: { x: number; y: number }[] = [],
   mapScale = 1,
   mapMinX = 0,
-  mapMinY = 0,
+  mapMaxY = 0,
   mapOffsetX = 0,
   mapOffsetY = 0;
 function prepareMap() {
   const points = meta.track.points;
   mapMinX = Math.min(...points.map((p) => p[0]));
-  mapMinY = Math.min(...points.map((p) => p[1]));
+  mapMaxY = Math.max(...points.map((p) => p[1]));
   const w = Math.max(...points.map((p) => p[0])) - mapMinX,
-    h = Math.max(...points.map((p) => p[1])) - mapMinY;
+    h = mapMaxY - Math.min(...points.map((p) => p[1]));
   mapScale = Math.min(310 / w, 175 / h);
   mapOffsetX = (360 - w * mapScale) / 2;
   mapOffsetY = (220 - h * mapScale) / 2;
   mapPoints = points.map((p) => ({
     x: mapOffsetX + (p[0] - mapMinX) * mapScale,
-    y: mapOffsetY + (p[1] - mapMinY) * mapScale,
+    y: mapOffsetY + (mapMaxY - p[1]) * mapScale,
   }));
 }
 function drawMap(ranking: { d: Driver; i: number; p: number }[]) {
@@ -543,7 +545,7 @@ function drawMap(ranking: { d: Driver; i: number; p: number }[]) {
     const k = i * 16;
     if (!frame[k + 12]) return;
     const x = mapOffsetX + (frame[k] - mapMinX) * mapScale,
-      y = mapOffsetY + (frame[k + 1] - mapMinY) * mapScale;
+      y = mapOffsetY + (mapMaxY - frame[k + 1]) * mapScale;
     ctx.beginPath();
     ctx.arc(x, y, i === focus ? 8 : 5, 0, Math.PI * 2);
     ctx.fillStyle = `#${d.team_colour}`;
@@ -554,23 +556,30 @@ function drawMap(ranking: { d: Driver; i: number; p: number }[]) {
   });
 }
 
+/** Fetches a replay JSON asset, preferring its gzip twin when the browser can inflate it. */
+async function loadJson<T>(name: string): Promise<T> {
+  const compressed = "DecompressionStream" in window;
+  const response = await fetch(`/replay/${name}${compressed ? ".gz" : ""}`);
+  if (!response.ok)
+    throw new Error(`The race bundle is not available (${name}).`);
+  let bytes = new Uint8Array(await response.arrayBuffer());
+  if (compressed && bytes[0] === 0x1f && bytes[1] === 0x8b)
+    bytes = new Uint8Array(
+      await new Response(
+        new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip")),
+      ).arrayBuffer(),
+    );
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
 async function init() {
   try {
-    const compressed = "DecompressionStream" in window;
-    const response = await fetch(
-      compressed ? "/replay/metadata.json.gz" : "/replay/metadata.json",
-    );
-    if (!response.ok) throw new Error("The race bundle is not available.");
-    let metadataBytes = new Uint8Array(await response.arrayBuffer());
-    if (compressed && metadataBytes[0] === 0x1f && metadataBytes[1] === 0x8b)
-      metadataBytes = new Uint8Array(
-        await new Response(
-          new Blob([metadataBytes])
-            .stream()
-            .pipeThrough(new DecompressionStream("gzip")),
-        ).arrayBuffer(),
-      );
-    meta = JSON.parse(new TextDecoder().decode(metadataBytes));
+    // The circuit's surroundings are a nice-to-have: replay without them if missing.
+    const venue = loadJson<Venue>("venue.json").catch((error) => {
+      console.warn("Venue unavailable", error);
+      return EMPTY_VENUE;
+    });
+    meta = await loadJson<Metadata>("metadata.json");
     el("duration").textContent = clock(meta.duration);
     // The Wii Menu shows the date as "Fri 6/7"; this is race day.
     const raceDay = new Date(meta.session.date_start);
@@ -590,7 +599,7 @@ async function init() {
       .load('500 25px "Zen Kaku Gothic New"')
       .catch(() => undefined);
     await new Promise((r) => setTimeout(r, 30));
-    scene = new ReplayScene(el("scene"), meta);
+    scene = new ReplayScene(el("scene"), meta, await venue);
     portraits = miiPortraits(scene.miis, scene.atlas);
     scene.onStationChange = (name) => {
       el("station-name").textContent = name;

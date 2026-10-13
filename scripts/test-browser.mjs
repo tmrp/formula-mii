@@ -45,6 +45,8 @@ try {
     timeout: 60000,
   });
   assert.equal(await page.locator(".driver-row").count(), 20);
+  // The OpenStreetMap venue loaded, so the grandstands are full of Miis.
+  assert.ok((await page.evaluate(() => window.__replay.spectators)) > 1000);
   assert.equal(await page.locator("canvas").count(), 2);
   const state = () => page.evaluate(() => window.__replay);
   const seek = async (t) => {
@@ -162,7 +164,7 @@ try {
   await page.locator("#play").click();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Chromium desktop/mobile; full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen and settings.",
+    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen and settings.",
   );
 } finally {
   await browser?.close();

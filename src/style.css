@@ -823,6 +823,9 @@ h2 {
 .scene-instruction span {
   margin: 0 2px;
 }
+.scene-instruction em {
+  font-style: normal;
+}
 .track-sign {
   position: absolute;
   left: 20px;
@@ -1863,6 +1866,10 @@ kbd {
     margin-left: 0;
   }
   .tire-chip {
+    display: none;
+  }
+  .scene-instruction span,
+  .scene-instruction em {
     display: none;
   }
   .scene-instruction {

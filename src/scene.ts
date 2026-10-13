@@ -16,37 +16,18 @@ import {
   type HairStyle,
   type Mii,
 } from "./mii";
+import {
+  ASPHALT_LIFT,
+  buildVenue,
+  EMPTY_VENUE,
+  mesh,
+  toWorld,
+  v,
+  type Ground,
+  type Station,
+  type Venue,
+} from "./venue";
 
-const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-const mat = (color: THREE.ColorRepresentation) =>
-  new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0 });
-function mesh(
-  g: THREE.BufferGeometry,
-  m: THREE.Material,
-  parent: THREE.Object3D,
-  x = 0,
-  y = 0,
-  z = 0,
-) {
-  const o = new THREE.Mesh(g, m);
-  o.position.set(x, y, z);
-  o.castShadow = true;
-  o.receiveShadow = true;
-  parent.add(o);
-  return o;
-}
-function box(
-  parent: THREE.Object3D,
-  m: THREE.Material,
-  x: number,
-  y: number,
-  z: number,
-  w: number,
-  h: number,
-  d: number,
-) {
-  return mesh(new THREE.BoxGeometry(w, h, d), m, parent, x, y, z);
-}
 // Car parts are merged per role. Each role becomes one instanced layer, and
 // every driver gets that layer's colour from their team or their Mii.
 class Parts {
@@ -259,11 +240,10 @@ export class ReplayScene {
   private cameraSnap = true;
   private shadowLight: THREE.DirectionalLight;
   private observer: ResizeObserver;
-  private stations: {
-    position: THREE.Vector3;
-    name: string;
-    point: THREE.Vector3;
-  }[] = [];
+  readonly ground: Ground;
+  readonly spectators: number;
+  private stations: Station[];
+  private crowdTime: { value: number };
   private autoStation = 0;
   private cameraTarget = new THREE.Vector3();
   private desiredPosition = new THREE.Vector3();
@@ -276,6 +256,10 @@ export class ReplayScene {
     .makeRotationX(-Math.PI / 2)
     .scale(v(1, 1.7, 1));
   private blobShadows: THREE.InstancedMesh;
+  private ringBase = new THREE.Quaternion().setFromAxisAngle(
+    v(1, 0, 0),
+    -Math.PI / 2,
+  );
   private detailMask = -1;
   private dirty = true;
   private adaptive = true;
@@ -285,6 +269,7 @@ export class ReplayScene {
   constructor(
     readonly container: HTMLElement,
     readonly meta: Metadata,
+    venue: Venue = EMPTY_VENUE,
   ) {
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -313,7 +298,8 @@ export class ReplayScene {
     this.controls.addEventListener("change", () => {
       this.dirty = true;
     });
-    this.track = meta.track.points.map((p) => v(p[0], 0.7, p[1]));
+    // Recorded positions with their recorded elevation.
+    this.track = meta.track.points.map((p) => toWorld(p[0], p[1], p[2]));
     const bounds = new THREE.Box3().setFromPoints(this.track);
     this.center = bounds.getCenter(new THREE.Vector3());
     this.extent = Math.max(
@@ -346,12 +332,21 @@ export class ReplayScene {
     this.shadowLight.shadow.bias = -0.0005;
     this.shadowLight.shadow.autoUpdate = false;
     this.shadowLight.shadow.needsUpdate = true;
-    this.buildWorld();
+    const built = buildVenue(this.scene, this.track, venue, this.extent * 0.85);
+    this.ground = built.ground;
+    this.stations = built.stations;
+    this.crowdTime = built.crowdTime;
+    this.spectators = built.spectators;
     this.mergeStaticWorld();
     this.buildSky();
     this.miis = meta.drivers.map(miiFor);
     this.atlas = faceAtlas(this.miis);
-    this.cars = meta.drivers.map(() => new THREE.Object3D());
+    this.cars = meta.drivers.map(() => {
+      const car = new THREE.Object3D();
+      // Heading first, then pitch with the slope.
+      car.rotation.order = "YXZ";
+      return car;
+    });
     this.carLayers = this.makeLayers(carParts(this.miis));
     this.distantLayers = this.makeLayers(distantCarParts());
     this.blobShadows = new THREE.InstancedMesh(
@@ -377,7 +372,6 @@ export class ReplayScene {
       }),
       this.scene,
     );
-    this.focusRing.rotation.x = -Math.PI / 2;
     const canvas = document.createElement("canvas");
     canvas.width = 128;
     canvas.height = 64;
@@ -462,13 +456,16 @@ export class ReplayScene {
       if (!(obj instanceof THREE.Mesh) || obj instanceof THREE.InstancedMesh)
         return;
       const material = obj.material as THREE.MeshStandardMaterial;
-      const key = `${material.type}:${material.color.getHex()}:${material.side}`;
+      if (material.map || material.transparent || material.vertexColors) return;
+      const key = `${material.type}:${material.color.getHex()}:${material.side}:${material.polygonOffset}`;
       const batch = batches.get(key) ?? {
         material,
         geometries: [],
         objects: [],
       };
-      batch.geometries.push(obj.geometry.clone().applyMatrix4(obj.matrixWorld));
+      const geometry = obj.geometry.clone().applyMatrix4(obj.matrixWorld);
+      geometry.deleteAttribute("uv");
+      batch.geometries.push(geometry);
       batch.objects.push(obj);
       batches.set(key, batch);
     });
@@ -484,301 +481,6 @@ export class ReplayScene {
       merged.matrixAutoUpdate = false;
       batch.geometries.forEach((g) => g.dispose());
     }
-  }
-  private buildWorld() {
-    const radius = this.extent * 0.86;
-    const island = mesh(
-      new THREE.CylinderGeometry(radius, radius * 0.93, 55, 64),
-      mat("#5b8f3d"),
-      this.scene,
-      this.center.x,
-      -29,
-      this.center.z,
-    );
-    island.receiveShadow = true;
-    mesh(
-      new THREE.CylinderGeometry(radius * 0.935, radius * 0.875, 12, 64),
-      mat("#ecdcaa"),
-      this.scene,
-      this.center.x,
-      -62,
-      this.center.z,
-    );
-    const land = mesh(
-      new THREE.CircleGeometry(radius, 64),
-      mat("#6ea846"),
-      this.scene,
-      this.center.x,
-      -0.1,
-      this.center.z,
-    );
-    land.rotation.x = -Math.PI / 2;
-    const curve = new THREE.CatmullRomCurve3(this.track, true, "centripetal");
-    const points = curve.getPoints(1600);
-    const ribbon = (width: number, y: number, color: string) => {
-      const pos: number[] = [],
-        idx: number[] = [];
-      for (let i = 0; i < points.length; i++) {
-        const p = points[i];
-        const tangent = points[(i + 1) % points.length]
-          .clone()
-          .sub(points[Math.max(0, i - 1)])
-          .normalize();
-        const normal = v(-tangent.z, 0, tangent.x).multiplyScalar(width / 2);
-        pos.push(
-          p.x + normal.x,
-          y,
-          p.z + normal.z,
-          p.x - normal.x,
-          y,
-          p.z - normal.z,
-        );
-        if (i < points.length - 1) {
-          const n = i * 2;
-          idx.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
-        }
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-      g.setIndex(idx);
-      g.computeVertexNormals();
-      const material = mat(color);
-      material.side = THREE.DoubleSide;
-      mesh(g, material, this.scene);
-    };
-    ribbon(29, 0.05, "#84bb5c");
-    ribbon(20, 0.12, "#ffffff");
-    ribbon(17, 0.18, "#7c8386");
-    const curbGeos: THREE.BufferGeometry[][] = [[], []];
-    for (let i = 0; i < points.length - 1; i += 5) {
-      const a = points[i],
-        b = points[Math.min(i + 5, points.length - 1)];
-      const dir = b.clone().sub(a);
-      for (const sign of [-1, 1]) {
-        const normal = v(-dir.z, 0, dir.x)
-          .normalize()
-          .multiplyScalar(sign * 9.25);
-        const g = new THREE.BoxGeometry(1.4, 0.3, dir.length());
-        const m = new THREE.Matrix4().compose(
-          a.clone().add(b).multiplyScalar(0.5).add(normal).setY(0.22),
-          new THREE.Quaternion().setFromAxisAngle(
-            v(0, 1, 0),
-            Math.atan2(dir.x, dir.z),
-          ),
-          v(1, 1, 1),
-        );
-        g.applyMatrix4(m);
-        curbGeos[Math.floor(i / 5) % 2].push(g);
-      }
-    }
-    curbGeos.forEach((g, i) => {
-      const merged = mergeGeometries(g, false);
-      if (merged) mesh(merged, mat(i ? "#ffffff" : "#e5463c"), this.scene);
-      g.forEach((x) => x.dispose());
-    });
-    // Simple pit lane beside the real start/finish segment.
-    const start = this.track[0];
-    const tangent = this.track[Math.min(5, this.track.length - 1)]
-      .clone()
-      .sub(start)
-      .normalize();
-    const normal = v(-tangent.z, 0, tangent.x);
-    const pit = new THREE.Group();
-    pit.position.copy(start).addScaledVector(normal, 35);
-    pit.rotation.y = Math.atan2(tangent.x, tangent.z);
-    this.scene.add(pit);
-    box(pit, mat("#7c8386"), 0, 0.15, 18, 15, 0.3, 210);
-    box(pit, mat("#f5f5f5"), 15, 8, 10, 17, 16, 190);
-    box(pit, mat("#34beed"), 15, 18, 10, 22, 3, 195);
-    const glass = mat("#8fd6f2");
-    for (let i = 0; i < 16; i++) {
-      box(pit, glass, 5.9, 6, -77 + i * 11, 0.3, 7, 8);
-      box(
-        pit,
-        mat(i % 2 ? "#ffffff" : "#e6e6e6"),
-        6.5,
-        15,
-        -77 + i * 11,
-        0.5,
-        2.5,
-        8,
-      );
-    }
-    const gantry = new THREE.Group();
-    gantry.position.copy(start);
-    gantry.rotation.y = Math.atan2(tangent.x, tangent.z);
-    this.scene.add(gantry);
-    const white = mat("#ffffff");
-    box(gantry, white, -13, 10, 0, 1.5, 20, 2);
-    box(gantry, white, 13, 10, 0, 1.5, 20, 2);
-    box(gantry, mat("#34beed"), 0, 20, 0, 28, 5, 2);
-    const sign = this.textSprite("Formula Mii", "#ffffff", "#12a3dd", 24, 5);
-    sign.position.set(0, 20, 1.1);
-    gantry.add(sign);
-    for (let x = -8; x < 8; x += 2)
-      for (let z = 0; z < 3; z++) {
-        box(
-          gantry,
-          mat((Math.floor(x / 2) + z) % 2 ? "#ffffff" : "#3a3a3a"),
-          x,
-          0.35,
-          z * 2,
-          2,
-          0.03,
-          2,
-        );
-      }
-    // Instanced trees: hundreds of props in three draw calls.
-    let seed = 19;
-    const random = () => {
-      seed = (seed * 16807) % 2147483647;
-      return (seed - 1) / 2147483646;
-    };
-    const treePoints: THREE.Vector3[] = [];
-    for (let i = 0; i < 800 && treePoints.length < 200; i++) {
-      const angle = random() * Math.PI * 2,
-        dist = Math.sqrt(random()) * radius * 0.93;
-      const p = v(
-        this.center.x + Math.cos(angle) * dist,
-        0,
-        this.center.z + Math.sin(angle) * dist,
-      );
-      if (this.track.some((t) => t.distanceTo(p) < 33)) continue;
-      if (p.distanceTo(pit.position) < 130) continue;
-      treePoints.push(p);
-    }
-    const trunks = new THREE.InstancedMesh(
-      new THREE.CylinderGeometry(1.3, 1.9, 10, 6),
-      mat("#9a6a3c"),
-      treePoints.length,
-    );
-    const crowns = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(9, 1),
-      mat("#3c9a38"),
-      treePoints.length,
-    );
-    const tops = new THREE.InstancedMesh(
-      new THREE.IcosahedronGeometry(6.5, 1),
-      mat("#68bd42"),
-      treePoints.length,
-    );
-    treePoints.forEach((p, i) => {
-      const scale = 0.7 + random() * 0.7;
-      const q = new THREE.Quaternion().setFromAxisAngle(
-        v(0, 1, 0),
-        random() * 6.28,
-      );
-      trunks.setMatrixAt(
-        i,
-        new THREE.Matrix4().compose(
-          p.clone().setY(5 * scale),
-          q,
-          v(scale, scale, scale),
-        ),
-      );
-      crowns.setMatrixAt(
-        i,
-        new THREE.Matrix4().compose(
-          p.clone().setY(13 * scale),
-          q,
-          v(scale, scale, scale),
-        ),
-      );
-      tops.setMatrixAt(
-        i,
-        new THREE.Matrix4().compose(
-          p.clone().setY(21 * scale),
-          q,
-          v(scale, scale, scale),
-        ),
-      );
-    });
-    for (const obj of [trunks, crowns, tops]) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-      this.scene.add(obj);
-    }
-    const seating = new THREE.Group();
-    const seatingPoint = this.track[Math.floor(this.track.length * 0.84)];
-    seating.position.copy(seatingPoint).add(v(45, 0, 0));
-    this.scene.add(seating);
-    const seats = [mat("#ffffff"), mat("#34beed"), mat("#ffd820")];
-    for (let row = 0; row < 6; row++)
-      box(seating, seats[row % 3], row * 4, 2 + row * 3, 0, 5, 3, 110);
-    box(seating, mat("#ffffff"), 9, 24, 0, 38, 2, 118);
-    const lake = mesh(
-      new THREE.CircleGeometry(1, 48),
-      mat("#5cc3ea"),
-      this.scene,
-      this.center.x + radius * 0.53,
-      0.02,
-      this.center.z + radius * 0.15,
-    );
-    lake.rotation.x = -Math.PI / 2;
-    lake.scale.set(110, 65, 1);
-    const city = new THREE.Group();
-    this.scene.add(city);
-    const cityMats = [mat("#f7f7f7"), mat("#e2e9ee"), mat("#cbd8e2")];
-    for (let i = 0; i < 35; i++) {
-      const a = Math.PI * 1.1 + i * 0.038;
-      const h = 25 + random() * 80;
-      box(
-        city,
-        cityMats[i % 3],
-        this.center.x + Math.cos(a) * radius * 0.84,
-        h / 2,
-        this.center.z + Math.sin(a) * radius * 0.84,
-        18 + random() * 22,
-        h,
-        18 + random() * 16,
-      );
-    }
-    const cloudGeo = new THREE.SphereGeometry(1, 10, 8);
-    const cloudMat = new THREE.MeshBasicMaterial({ color: "#ffffff" });
-    const cloudMesh = new THREE.InstancedMesh(cloudGeo, cloudMat, 40);
-    for (let i = 0; i < 40; i++) {
-      const angle = Math.floor(i / 4) * 0.628;
-      const p = v(
-        this.center.x + Math.cos(angle) * (radius + 150) + (i % 4) * 35,
-        180 + (i % 3) * 15,
-        this.center.z + Math.sin(angle) * (radius + 150),
-      );
-      cloudMesh.setMatrixAt(
-        i,
-        new THREE.Matrix4().compose(p, new THREE.Quaternion(), v(45, 22, 27)),
-      );
-    }
-    this.scene.add(cloudMesh);
-    const names = [
-      "Senna S · Turn 1",
-      "Curva do Sol · Turn 3",
-      "Reta Oposta · Turn 4",
-      "Ferradura · Turn 6",
-      "Pinheirinho · Turn 8",
-      "Bico de Pato · Turn 10",
-      "Junção · Turn 12",
-      "Finish straight",
-    ];
-    const fractions = [0.06, 0.14, 0.28, 0.42, 0.52, 0.64, 0.77, 0.95];
-    fractions.forEach((f, i) => {
-      const n = Math.floor(f * this.track.length),
-        point = this.track[n];
-      const t = this.track[(n + 3) % this.track.length]
-        .clone()
-        .sub(point)
-        .normalize();
-      const normal = v(-t.z, 0, t.x);
-      const pos = point
-        .clone()
-        .addScaledVector(normal, i % 2 ? 65 : -65)
-        .add(v(0, 24, 0));
-      this.stations.push({ position: pos, name: names[i], point });
-      const tower = new THREE.Group();
-      tower.position.copy(pos).setY(0);
-      box(tower, mat("#ffffff"), 0, 10, 0, 2, 20, 2);
-      box(tower, mat("#34beed"), 0, 21, 0, 5, 3, 3);
-      this.scene.add(tower);
-    });
   }
   // A Wii Sports sky: deep blue overhead, fading to pale blue at the horizon.
   private buildSky() {
@@ -807,29 +509,6 @@ export class ReplayScene {
     sky.position.copy(this.center);
     sky.renderOrder = -1;
     this.scene.add(sky);
-  }
-  private textSprite(
-    text: string,
-    bg: string,
-    fg: string,
-    w: number,
-    h: number,
-  ) {
-    const c = document.createElement("canvas");
-    c.width = 512;
-    c.height = 128;
-    const ctx = c.getContext("2d")!;
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, 512, 128);
-    ctx.fillStyle = fg;
-    ctx.textAlign = "center";
-    ctx.font = '500 56px "Zen Kaku Gothic New", sans-serif';
-    ctx.fillText(text, 256, 83);
-    const s = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c) }),
-    );
-    s.scale.set(w, h, 1);
-    return s;
   }
   overview() {
     this.controls.target.copy(this.center);
@@ -905,12 +584,22 @@ export class ReplayScene {
     for (let i = 0; i < this.cars.length; i++) {
       const k = i * 16,
         car = this.cars[i];
-      car.position.set(frame[k], 0.3, frame[k + 1]);
-      this.lastHeading[i] = frame[k + 3];
-      car.rotation.y = this.lastHeading[i];
       car.visible = frame[k + 12] > 0;
-      car.updateMatrix();
       if (!car.visible) continue;
+      // OpenF1 heading is clockwise from north; the scene's north is -z.
+      const heading = Math.PI - frame[k + 3],
+        x = frame[k],
+        z = -frame[k + 1],
+        fx = Math.sin(heading) * 4,
+        fz = Math.cos(heading) * 4;
+      const pitch = Math.atan2(
+        this.ground.height(x - fx, z - fz) - this.ground.height(x + fx, z + fz),
+        8,
+      );
+      car.position.set(x, this.ground.height(x, z) + ASPHALT_LIFT + 0.04, z);
+      this.lastHeading[i] = heading;
+      car.rotation.set(pitch, heading, 0);
+      car.updateMatrix();
       const detailed =
         car.position.distanceToSquared(this.camera.position) < 130 * 130;
       if (detailed) detailMask |= 1 << i;
@@ -923,8 +612,14 @@ export class ReplayScene {
         if (layer.cellAttribute)
           layer.cellAttribute.setXY(n, ...layer.cells![i]);
       }
-      this.blobMatrix.makeRotationY(car.rotation.y).multiply(this.blobBase);
-      this.blobMatrix.setPosition(car.position.x, 0.25, car.position.z);
+      this.blobMatrix
+        .makeRotationFromEuler(car.rotation)
+        .multiply(this.blobBase);
+      this.blobMatrix.setPosition(
+        car.position.x,
+        car.position.y + 0.08,
+        car.position.z,
+      );
       this.blobShadows.setMatrixAt(visibleCount++, this.blobMatrix);
     }
     if (detailMask !== this.detailMask) {
@@ -943,12 +638,25 @@ export class ReplayScene {
     this.blobShadows.instanceMatrix.needsUpdate = true;
     const car = this.cars[this.focus],
       pos = car.position;
-    this.focusRing.position.copy(pos).setY(0.4);
+    this.focusRing.position.copy(pos).add(v(0, 0.12, 0));
+    this.focusRing.quaternion.copy(car.quaternion).multiply(this.ringBase);
     this.focusRing.visible = car.visible;
     this.halo.position.copy(pos).add(v(0, 13, 0));
     this.halo.visible = car.visible && this.mode === "orbit";
-    if (this.mode === "orbit") this.controls.update();
-    else {
+    if (this.mode === "orbit") {
+      this.controls.update();
+      // Keep the free camera over the island and above the hills.
+      const target = this.controls.target,
+        reach = this.ground.radius * 0.9,
+        d = Math.hypot(target.x, target.z);
+      if (d > reach) target.multiplyScalar(reach / d);
+      const cam = this.camera.position,
+        floor = this.ground.height(cam.x, cam.z) + 12;
+      if (cam.y < floor) {
+        cam.y = floor;
+        this.camera.lookAt(target);
+      }
+    } else {
       const dir = v(Math.sin(car.rotation.y), 0, Math.cos(car.rotation.y));
       this.cameraTarget.copy(pos).add(v(0, 3, 0));
       let fov = 48;
@@ -963,7 +671,7 @@ export class ReplayScene {
           .copy(pos)
           .addScaledVector(dir, 1.8)
           .add(v(0, 5.6, 0));
-        this.cameraTarget.addScaledVector(dir, 75).setY(3.8);
+        this.cameraTarget.addScaledVector(dir, 75).setY(pos.y + 3.8);
         fov = 76;
       } else if (this.mode === "portrait") {
         // A three-quarter view of the Mii, like a character select screen.
@@ -997,7 +705,7 @@ export class ReplayScene {
         }
         const s = this.stations[station];
         this.desiredPosition.copy(s.position);
-        this.cameraTarget.setY(3);
+        this.cameraTarget.setY(pos.y + 3);
         fov = THREE.MathUtils.clamp(2400 / s.position.distanceTo(pos), 16, 58);
         this.onStationChange?.(s.name);
       }
@@ -1009,6 +717,7 @@ export class ReplayScene {
       this.cameraSnap = false;
     }
     if (force || this.dirty) {
+      this.crowdTime.value = performance.now() / 1000;
       this.renderer.render(this.scene, this.camera);
       this.dirty = false;
       return true;

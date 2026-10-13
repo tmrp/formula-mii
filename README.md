@@ -79,7 +79,8 @@ order; select another driver to continue following the race.
   [the data pipeline](docs/data-pipeline.md) to reproduce acquisition or
   re-export the data.
 
-`src/scene.ts` owns rendering and cameras, `src/main.ts` owns the player UI,
+`src/scene.ts` owns rendering and cameras, `src/venue.ts` builds the circuit and
+its surroundings from `public/replay/venue.json`, `src/main.ts` owns the player UI,
 `src/mii.ts` builds the Miis, `src/wii.ts` draws the Wii Menu chrome, and
 `engine/src/lib.rs` owns interpolation and driver availability.
 
@@ -130,11 +131,19 @@ python3 scripts/data_verify.py --turso-url http://127.0.0.1:8097
 
 OpenF1 locations are approximate and do not capture accurate lateral
 wheel-to-wheel placement. Cars may overlap; this is a recorded telemetry
-reconstruction, not a collision simulation or broadcast replica. Elevation,
-terrain, buildings and vegetation are stylized. Short recorded gaps are held and
+reconstruction, not a collision simulation or broadcast replica. The track,
+cars and terrain follow the recorded elevation. The pit lane, lake, buildings,
+streets, woods and the three mapped main-straight grandstands come from
+OpenStreetMap, fitted to the reference lap within about 7 m; the stands at the
+corners are placed at Interlagos's spectator areas rather than surveyed, and
+building heights, trees and spectators are illustrative. Short recorded gaps are held and
 longer gaps hide cars rather than inventing a trajectory. Race start/finish and
 retirement cutoffs are derived from OpenF1 timing, with documented timing
 precision in the data pipeline.
+
+Venue map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright),
+available under the Open Database License; `public/replay/venue.json` is an
+extract of it under the same licence.
 
 Independent fan project; not affiliated with Formula 1 or Nintendo. The original
 3D models, Miis and interface art are generated in code; no Nintendo assets are

@@ -50,6 +50,7 @@ export type HairStyle =
   | "curly"
   | "tousled"
   | "wavy"
+  | "bob"
   | "braids";
 type EyeStyle = "oval" | "round" | "almond";
 type BrowStyle = "arch" | "flat" | "bold" | "soft";
@@ -283,6 +284,51 @@ export function miiFor(driver: Driver): Mii {
 
 export const hairKey = (m: Mii) => `${m.hairStyle}:${m.part}`;
 
+/** Hairstyles a crowd is made from, in rough order of popularity. */
+export const CROWD_STYLES: HairStyle[] = [
+  "short",
+  "bob",
+  "swept",
+  "wavy",
+  "crop",
+  "curly",
+  "quiff",
+  "tousled",
+];
+// A São Paulo crowd: the full range of Mii skin tones, and a lot of Brazil
+// yellow and green among the favourite colours.
+const CROWD_SKIN = [0, 0, 0, 1, 2, 2, 3, 4, 4, 5];
+const CROWD_FAVORITE = [2, 2, 2, 4, 4, 4, 0, 1, 5, 6, 3, 7, 8, 9, 10, 11];
+
+export function randomMii(random: () => number): Mii {
+  const pick = <T>(list: readonly T[]) =>
+    list[Math.floor(random() * list.length) % list.length];
+  const hairStyle = pick(CROWD_STYLES);
+  return {
+    skin: SKIN[pick(CROWD_SKIN)],
+    hair: HAIR[random() < 0.08 ? 4 : pick([0, 0, 1, 1, 2, 3, 5, 6, 7])],
+    eyeColor: EYE[random() < 0.75 ? 0 : pick([1, 2, 3, 4, 5])],
+    hairStyle,
+    part: ASYMMETRIC.includes(hairStyle) && random() < 0.5 ? -1 : 1,
+    eyes: pick(["oval", "oval", "round", "almond"] as const),
+    brows: pick(["arch", "flat", "bold", "soft"] as const),
+    mouth: pick(["smile", "smile", "grin", "grin", "line", "smirk"] as const),
+    beard:
+      hairStyle === "bob"
+        ? "none"
+        : pick([
+            "none",
+            "none",
+            "none",
+            "none",
+            "stubble",
+            "mustache",
+            "full",
+          ] as const),
+    favorite: FAVORITE[pick(CROWD_FAVORITE)],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Head and hair geometry. Everything is in head-local units with the head
 // centre at the origin, facing +z.
@@ -340,9 +386,9 @@ export function earGeometry(radius: number) {
 const FACE_SIZE = 1.05;
 const FACE_Y = -0.12;
 
-export function faceGeometry(radius: number) {
-  const cols = 28,
-    rows = 28,
+export function faceGeometry(radius: number, detail = 28, lift = 1.012) {
+  const cols = detail,
+    rows = detail,
     positions: number[] = [],
     uvs: number[] = [],
     index: number[] = [];
@@ -355,7 +401,7 @@ export function faceGeometry(radius: number) {
           j / rows,
         ),
         phi = THREE.MathUtils.lerp(-0.47 * Math.PI, 0.47 * Math.PI, i / cols);
-      headPoint(dir(theta, phi, point), point).multiplyScalar(radius * 1.012);
+      headPoint(dir(theta, phi, point), point).multiplyScalar(radius * lift);
       positions.push(point.x, point.y, point.z);
       uvs.push(
         0.5 + point.x / (2 * FACE_SIZE * radius),
@@ -480,6 +526,15 @@ const SHAPES: Record<HairStyle, HairShape> = {
       0.1 +
       0.12 * crown(t) +
       0.035 * Math.sin(7 * phi + 5 * t) * Math.sin(8 * t) * crown(t),
+  },
+  bob: {
+    line: (phi) => {
+      const a = Math.abs(phi) / PI;
+      return (
+        PI * (0.37 + 0.4 * smooth(0.22, 0.42, a) - 0.02 * smooth(0.6, 1, a))
+      );
+    },
+    thick: (t) => 0.11 + 0.07 * crown(t),
   },
   braids: {
     line: (phi) => baseHairline(phi) - 0.015 * PI,
@@ -813,25 +868,25 @@ function drawFace(ctx: CanvasRenderingContext2D, m: Mii) {
   ctx.restore();
 }
 
-export function faceAtlas(miis: Mii[]): FaceAtlas {
+export function faceAtlas(miis: Mii[], cell = CELL): FaceAtlas {
   const cols = Math.min(5, miis.length),
     rows = Math.ceil(miis.length / cols);
   const canvas = document.createElement("canvas");
-  canvas.width = cols * CELL;
-  canvas.height = rows * CELL;
+  canvas.width = cols * cell;
+  canvas.height = rows * cell;
   const ctx = canvas.getContext("2d")!;
-  const scale = CELL / 2 / FACE_SIZE;
+  const scale = cell / 2 / FACE_SIZE;
   miis.forEach((m, i) => {
-    const x = (i % cols) * CELL,
-      y = Math.floor(i / cols) * CELL;
+    const x = (i % cols) * cell,
+      y = Math.floor(i / cols) * cell;
     // Head units, y up, centred on the decal.
     ctx.setTransform(
       scale,
       0,
       0,
       -scale,
-      x + CELL / 2,
-      y + CELL / 2 + FACE_Y * scale,
+      x + cell / 2,
+      y + cell / 2 + FACE_Y * scale,
     );
     drawFace(ctx, m);
   });
@@ -891,7 +946,7 @@ export function instancedFaceMaterial(atlas: FaceAtlas) {
         `#include <uv_vertex>\nvMapUv = faceCell + clamp(uv, 0.01, 0.99) * vec2(${(1 / atlas.cols).toFixed(6)}, ${(1 / atlas.rows).toFixed(6)});`,
       );
   };
-  material.customProgramCacheKey = () => "mii-face";
+  material.customProgramCacheKey = () => `mii-face-${atlas.cols}x${atlas.rows}`;
   return miiGlow(material);
 }
 
