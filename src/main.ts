@@ -6,17 +6,11 @@ import {
   SkipForward,
   RotateCcw,
   Maximize2,
-  ChevronDown,
   ArrowUpRight,
   Settings2,
   Info,
-  X,
   Camera,
-  CircleHelp,
   Flag,
-  VolumeX,
-  Leaf,
-  Check,
   MapPin,
   Gauge,
   Keyboard,
@@ -24,13 +18,20 @@ import {
   Video,
   UserRound,
   Navigation,
-  Binoculars,
-  Trophy,
   ChevronLeft,
   ChevronRight,
+  Mail,
 } from "lucide";
 import { ReplayEngine } from "./engine";
 import { ReplayScene } from "./scene";
+import { miiPortraits } from "./mii";
+import {
+  bottomBar,
+  installMenuSounds,
+  setLcd,
+  setSounds,
+  soundsEnabled,
+} from "./wii";
 import {
   latest,
   clock,
@@ -53,17 +54,11 @@ const icons = () =>
       SkipForward,
       RotateCcw,
       Maximize2,
-      ChevronDown,
       ArrowUpRight,
       Settings2,
       Info,
-      X,
       Camera,
-      CircleHelp,
       Flag,
-      VolumeX,
-      Leaf,
-      Check,
       MapPin,
       Gauge,
       Keyboard,
@@ -71,10 +66,9 @@ const icons = () =>
       Video,
       UserRound,
       Navigation,
-      Binoculars,
-      Trophy,
       ChevronLeft,
       ChevronRight,
+      Mail,
     },
   });
 const esc = (s: unknown) =>
@@ -85,65 +79,84 @@ const esc = (s: unknown) =>
         c
       ]!,
   );
+const brandMii = `<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M17 33c0-11 7-18 15-18s15 7 15 18c0 9-7 17-15 17s-15-8-15-17z" fill="#ffd3ad"/><path d="M15.6 31c-.6-11 6.4-19 16.4-19s17 8 16.4 19c-3-5-7-8-12-8.6-5 4-13 5.6-20.8 8.6z" fill="#382015"/><ellipse cx="26" cy="34" rx="2.2" ry="3" fill="#161210"/><ellipse cx="38" cy="34" rx="2.2" ry="3" fill="#161210"/><path d="M27 43q5 3.4 10 0" fill="none" stroke="#5a2118" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const warning = `<svg class="hs-icon" viewBox="0 0 48 42" aria-hidden="true"><path d="M24 3 45 39H3z" fill="#fff" stroke="#111" stroke-width="4" stroke-linejoin="round"/><path d="M24 15v12" stroke="#111" stroke-width="4.4" stroke-linecap="round"/><circle cx="24" cy="33" r="2.6" fill="#111"/></svg>`;
 app.innerHTML = `
  <header class="header">
-  <a class="brand" href="/" aria-label="Formula Mii home"><span class="brand-mark">f<span>m</span></span><span>formula<span class="brand-light">mii</span></span></a>
-  <div class="header-center"><span class="green-dot"></span>A little world. A real race.</div>
-  <div class="header-actions"><button class="text-button" id="about-button">${icon("info")}<span>About this replay</span></button><span class="header-divider"></span><button class="icon-button" id="settings-button" aria-label="Replay settings">${icon("settings-2")}</button></div>
+  <a class="brand" href="/" aria-label="Formula Mii home"><span class="brand-badge">${brandMii}</span><span class="brand-name">Formula Mii</span></a>
+  <div class="header-center">A little world. A real race.</div>
+  <div class="header-actions"><button class="pill-button" id="about-button">${icon("info")}<span>About this replay</span></button><button class="round-button small" id="settings-button" aria-label="Replay settings">${icon("settings-2")}</button></div>
  </header>
  <main>
-  <section class="race-heading">
-   <div><div class="eyebrow"><svg class="flag-brazil" aria-label="Brazil" viewBox="0 0 28 19"><rect width="28" height="19" rx="2" fill="#5c9966"/><path d="M14 3 24 9.5 14 16 4 9.5z" fill="#ead272"/><circle cx="14" cy="9.5" r="3.8" fill="#47748b"/><path d="M10.5 8.5q4-.5 7 2" fill="none" stroke="#e9f1d8" stroke-width=".8"/></svg> 2025 SEASON <span class="eyebrow-dot">·</span> ROUND 21</div><h1>São Paulo Grand Prix<span class="title-dot">.</span></h1><p>Interlagos, reimagined. Every lap. Every little driver.</p></div>
-   <div class="race-stats"><div><span class="stat-label">RACE DAY</span><strong>09 Nov 2025</strong></div><div><span class="stat-label">THE CIRCUIT</span><strong>4.309 <small>km</small></strong></div><div><span class="stat-label">THE DISTANCE</span><strong>71 <small>laps</small></strong></div><span class="poc-badge">PLAYABLE REPLAY</span></div>
-  </section>
-  <div class="replay-shell">
-   <aside class="standings">
-    <div class="panel-title"><h2>Race order</h2><span class="live-tag"><span></span>REPLAY</span></div>
-    <div class="standings-sub"><span id="lap-display">LAP 1 <em>/ 71</em></span><span id="race-state">ON TRACK</span></div>
-    <div class="standing-columns"><span>POS</span><span>DRIVER</span><span>GAP</span></div>
-    <div id="driver-list" class="driver-list" aria-label="Drivers. Select a driver to follow."></div>
-    <div class="standing-footer">${icon("navigation")}<span>Pick a driver to follow their race</span></div>
-   </aside>
-   <section class="stage" aria-label="3D race player">
-    <div id="scene" class="scene"></div>
-    <div class="scene-vignette"></div>
-    <div class="stage-top"><div class="location-chip">${icon("map-pin")}<span>AUTÓDROMO JOSÉ CARLOS PACE</span></div><button class="floating-button" id="fullscreen" aria-label="Enter fullscreen">${icon("maximize-2")}</button></div>
-    <div class="camera-panel">
-     <div class="camera-header"><span>${icon("camera")} CAMERA</span><span class="key-hint">C</span></div>
-     <div class="camera-options" role="group" aria-label="Camera perspective">
-      <button class="camera-option selected" data-camera="orbit">${icon("scan")}<span>Aerial</span><span class="camera-num">1</span></button>
-      <button class="camera-option" data-camera="chase">${icon("navigation")}<span>Chase</span><span class="camera-num">2</span></button>
-      <button class="camera-option" data-camera="onboard">${icon("gauge")}<span>Onboard</span><span class="camera-num">3</span></button>
-      <button class="camera-option" data-camera="portrait">${icon("user-round")}<span>Driver</span><span class="camera-num">4</span></button>
-      <button class="camera-option" data-camera="trackside">${icon("video")}<span>Trackside</span><span class="camera-num">5</span></button>
-     </div>
-     <div class="station-wrap" hidden><label for="station">TRACKSIDE CAMERA</label><select id="station"><option value="-1">Auto director</option></select><span id="station-name"></span></div>
-    </div>
-    <div class="scene-instruction" id="camera-instruction">${icon("scan")} Drag to explore <span>·</span> Scroll to zoom</div>
-    <div class="track-sign"><span>INTERLAGOS</span><strong>São Paulo, Brasil</strong></div>
-    <div class="focus-card" id="focus-card"><div class="avatar" id="avatar"></div><div class="focus-identity"><span class="focus-label">FOLLOWING <span id="focus-number">#4</span></span><strong id="focus-name">Lando Norris</strong><span id="focus-team">McLaren</span></div><div class="focus-divider"></div><div class="speed"><strong id="speed">0</strong><span>KM/H</span></div><div class="gear"><span>GEAR</span><strong id="gear">N</strong></div><div class="telemetry-bars"><span>THR <i><b id="throttle"></b></i></span><span>BRK <i><b id="brake"></b></i></span></div><span class="tire-chip" id="tire">M</span></div>
-    <div class="minimap-wrap"><canvas id="minimap" width="360" height="240" aria-label="Track map with live driver positions"></canvas><span>TRACK MAP</span></div>
-    <div id="status-note" class="status-note" hidden></div>
-    <div class="loading" id="loading"><div class="loading-logo">fm</div><h2>A big race. A little world.</h2><p id="load-label">Loading the São Paulo replay…</p><div class="load-track"><span id="load-progress"></span></div><span class="loading-note">REAL TELEMETRY · 20 DRIVERS · 71 LAPS</span></div>
+  <div class="page">
+   <section class="race-heading">
+    <div><div class="eyebrow"><svg class="flag-brazil" aria-label="Brazil" viewBox="0 0 28 19"><rect width="28" height="19" rx="2" fill="#2f9e58"/><path d="M14 3 24 9.5 14 16 4 9.5z" fill="#f4d430"/><circle cx="14" cy="9.5" r="3.8" fill="#2c5fa8"/><path d="M10.5 8.5q4-.5 7 2" fill="none" stroke="#fff" stroke-width=".8"/></svg> 2025 SEASON <span class="eyebrow-dot">·</span> ROUND 21</div><h1>São Paulo Grand Prix</h1><p>Interlagos, reimagined. Every lap. Every little driver.</p></div>
+    <div class="race-stats"><div><strong>09 Nov 2025</strong><span class="stat-label">Race day</span></div><div><strong>4.309 <small>km</small></strong><span class="stat-label">The circuit</span></div><div><strong>71 <small>laps</small></strong><span class="stat-label">The distance</span></div><span class="poc-badge">PLAYABLE REPLAY</span></div>
    </section>
+   <div class="replay-shell">
+    <aside class="standings tile">
+     <div class="panel-title"><h2>Race order</h2><span class="live-tag">REPLAY</span></div>
+     <div class="standings-sub"><span id="lap-display">LAP 1 <em>/ 71</em></span><span id="race-state">ON TRACK</span></div>
+     <div class="standing-columns"><span>POS</span><span>DRIVER</span><span>GAP</span></div>
+     <div id="driver-list" class="driver-list" aria-label="Drivers. Select a driver to follow."></div>
+     <div class="standing-footer">${icon("navigation")}<span>Pick a Mii to follow their race</span></div>
+    </aside>
+    <section class="stage tile" aria-label="3D race player">
+     <div id="scene" class="scene"></div>
+     <div class="scene-vignette"></div>
+     <div class="stage-top"><div class="location-chip">${icon("map-pin")}<span>AUTÓDROMO JOSÉ CARLOS PACE</span></div><button class="round-button small" id="fullscreen" aria-label="Enter fullscreen">${icon("maximize-2")}</button></div>
+     <div class="camera-panel">
+      <div class="camera-header"><span>${icon("camera")} Camera</span><span class="key-hint">C</span></div>
+      <div class="camera-options" role="group" aria-label="Camera perspective">
+       <button class="camera-option selected" data-camera="orbit">${icon("scan")}<span>Aerial</span><span class="camera-num">1</span></button>
+       <button class="camera-option" data-camera="chase">${icon("navigation")}<span>Chase</span><span class="camera-num">2</span></button>
+       <button class="camera-option" data-camera="onboard">${icon("gauge")}<span>Onboard</span><span class="camera-num">3</span></button>
+       <button class="camera-option" data-camera="portrait">${icon("user-round")}<span>Driver</span><span class="camera-num">4</span></button>
+       <button class="camera-option" data-camera="trackside">${icon("video")}<span>Trackside</span><span class="camera-num">5</span></button>
+      </div>
+      <div class="station-wrap" hidden><label for="station">Trackside camera</label><select id="station"><option value="-1">Auto director</option></select><span id="station-name"></span></div>
+     </div>
+     <div class="scene-instruction" id="camera-instruction">${icon("scan")} Drag to explore <span>·</span> Scroll to zoom</div>
+     <div class="track-sign"><span>Interlagos</span><strong>São Paulo, Brasil</strong></div>
+     <div class="focus-card" id="focus-card"><div class="avatar" id="avatar"></div><div class="focus-identity"><span class="focus-label">FOLLOWING <span id="focus-number">#4</span></span><strong id="focus-name">Lando Norris</strong><span id="focus-team">McLaren</span></div><div class="focus-divider"></div><div class="speed"><strong id="speed" class="lcd-value"></strong><span>KM/H</span></div><div class="gear"><span>GEAR</span><strong id="gear">N</strong></div><div class="telemetry-bars"><span>THR <i><b id="throttle"></b></i></span><span>BRK <i><b id="brake"></b></i></span></div><span class="tire-chip" id="tire">M</span></div>
+     <div class="minimap-wrap"><canvas id="minimap" width="360" height="240" aria-label="Track map with live driver positions"></canvas><span>TRACK MAP</span></div>
+     <div id="status-note" class="status-note" hidden></div>
+     <div class="loading" id="loading"><div class="hs"><h2>${warning}<span>WARNING - REAL TELEMETRY</span></h2><p>BEFORE RACING, READ <em>ABOUT THIS REPLAY</em> FOR IMPORTANT INFORMATION ABOUT DATA ACCURACY AND STYLISED SCENERY.</p><p class="hs-small">Every position, speed, gear and pit stint comes from OpenF1.</p><div class="load-track"><span id="load-progress"></span></div><p id="load-label">Loading the São Paulo replay…</p><span class="loading-note">REAL TELEMETRY · 20 DRIVERS · 71 LAPS</span></div></div>
+    </section>
+   </div>
   </div>
   <section class="transport" aria-label="Replay playback controls">
-   <div class="timeline-top"><span class="replay-caption">${icon("flag")} THE FULL RACE <span id="event-caption">Lights out in São Paulo</span></span><span class="elapsed"><strong id="current-time">00:00</strong><span>/</span><span id="duration">1:33:11</span></span></div>
-   <div class="timeline-wrap"><div class="timeline-events" id="timeline-events"></div><input id="timeline" class="timeline" type="range" min="0" max="5591" value="0" step="0.1" aria-label="Race timeline in seconds" disabled></div>
-   <div class="timeline-labels"><span>START</span><span>LAP 18</span><span>HALFWAY</span><span>LAP 54</span><span>FINISH</span></div>
-   <div class="transport-bottom"><div class="playback-buttons"><button class="icon-button" id="restart" aria-label="Restart replay" disabled>${icon("rotate-ccw")}</button><button class="icon-button" id="previous-lap" aria-label="Previous lap" disabled>${icon("skip-back")}</button><button class="play-button" id="play" aria-label="Play replay" disabled>${icon("play")}</button><button class="icon-button" id="next-lap" aria-label="Next lap" disabled>${icon("skip-forward")}</button><select id="rate" class="speed-select" aria-label="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1× speed</option><option value="2">2× speed</option><option value="4">4× speed</option><option value="8">8× speed</option><option value="16">16× speed</option><option value="32">32× speed</option><option value="64">64× speed</option></select></div><div class="lap-jump"><label for="lap-input">JUMP TO LAP</label><button id="lap-minus" class="icon-button small" aria-label="Jump to previous lap">${icon("chevron-left")}</button><input id="lap-input" type="number" min="1" max="71" value="1" aria-label="Jump to lap number"><button id="lap-plus" class="icon-button small" aria-label="Jump to next lap">${icon("chevron-right")}</button><span>/ 71</span></div><button class="keyboard-help" id="help-button">${icon("keyboard")}<span>Keyboard shortcuts</span></button></div>
+   <div class="timeline-area">
+    <div class="timeline-top"><span class="replay-caption">${icon("flag")} THE FULL RACE <span id="event-caption">Lights out in São Paulo</span></span></div>
+    <div class="timeline-wrap"><div class="timeline-events" id="timeline-events"></div><input id="timeline" class="timeline" type="range" min="0" max="5591" value="0" step="0.1" aria-label="Race timeline in seconds" disabled></div>
+    <div class="timeline-labels"><span>START</span><span>LAP 18</span><span>HALFWAY</span><span>LAP 54</span><span>FINISH</span></div>
+   </div>
+   <div class="wii-bar" id="wii-bar">
+    <svg class="bar-shape" aria-hidden="true"></svg>
+    <button class="round-button big" id="play" aria-label="Play replay" disabled>${icon("play")}</button>
+    <div class="bar-tools"><button class="square-button" id="restart" aria-label="Restart replay" disabled>${icon("rotate-ccw")}</button><button class="square-button" id="previous-lap" aria-label="Previous lap" disabled>${icon("skip-back")}</button><button class="square-button" id="next-lap" aria-label="Next lap" disabled>${icon("skip-forward")}</button><select id="rate" class="speed-select" aria-label="Playback speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1× speed</option><option value="2">2× speed</option><option value="4">4× speed</option><option value="8">8× speed</option><option value="16">16× speed</option><option value="32">32× speed</option><option value="64">64× speed</option></select></div>
+    <div class="bar-center"><div class="clock"><span id="current-time" class="lcd-value" role="timer"></span><span class="clock-suffix">of <span id="duration">1:33:11</span></span></div><div class="bar-date" id="race-date">Sun 11/9</div></div>
+    <div class="lap-jump"><label for="lap-input">JUMP TO LAP</label><button id="lap-minus" class="wii-arrow left" aria-label="Jump to previous lap"></button><input id="lap-input" type="number" min="1" max="71" value="1" aria-label="Jump to lap number"><button id="lap-plus" class="wii-arrow right" aria-label="Jump to next lap"></button><span>/ 71</span></div>
+    <button class="keyboard-help" id="help-button">${icon("keyboard")}<span>Shortcuts</span></button>
+    <button class="round-button big" id="messages-button" aria-label="Race control messages">${icon("mail")}<span class="message-count" id="message-count">0</span></button>
+   </div>
+   <footer><span><span class="footer-dot"></span>Powered by real OpenF1 telemetry <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer" aria-label="OpenF1 on GitHub">${icon("arrow-up-right")}</a></span><span>Made small. Played big.<span class="footer-engine">RUST + WASM</span></span></footer>
   </section>
-  <footer><span><span class="footer-dot"></span>Powered by real OpenF1 telemetry <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">${icon("arrow-up-right")}</a></span><span>Made small. Played big.<span class="footer-engine">RUST + WASM</span></span></footer>
  </main>
- <dialog id="dialog"><div class="dialog-header"><h2 id="dialog-title"></h2><button class="icon-button" id="dialog-close" aria-label="Close dialog">${icon("x")}</button></div><div id="dialog-content"></div></dialog>
+ <dialog id="dialog"><div class="dialog-header"><h2 id="dialog-title"></h2></div><div id="dialog-content"></div><div class="dialog-actions"><button class="pill-button wide" id="dialog-close" aria-label="Close dialog">OK</button></div></dialog>
 `;
 icons();
+installMenuSounds();
+bottomBar(document.getElementById("wii-bar")!);
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
+setLcd(el("current-time"), "00:00", "Elapsed 00:00");
+setLcd(el("speed"), "0", "0 km/h");
 let meta: Metadata,
   engine: ReplayEngine,
   scene: ReplayScene,
-  frame: Float32Array;
+  frame: Float32Array,
+  portraits: string[] = [];
 let time = 0,
   playing = false,
   rate = 1,
@@ -151,7 +164,8 @@ let time = 0,
   lastTick = performance.now(),
   lastUI = 0,
   mode: CameraMode = "orbit",
-  ready = false;
+  ready = false,
+  messagesRead = 0;
 const cameraModes: CameraMode[] = [
   "orbit",
   "chase",
@@ -165,9 +179,10 @@ let fps = 0,
   fpsStart = performance.now();
 let dataGap = false;
 
-function showDialog(title: string, html: string) {
+function showDialog(title: string, html: string, action = "OK") {
   el("dialog-title").textContent = title;
   el("dialog-content").innerHTML = html;
+  el("dialog-close").textContent = action;
   el<HTMLDialogElement>("dialog").showModal();
   icons();
 }
@@ -178,20 +193,45 @@ el("dialog").onclick = (e) => {
 el("about-button").onclick = () =>
   showDialog(
     "A real race in a little world.",
-    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>The cars and Mii-style avatars are a playful interpretation inspired by Wii Sports. Track elevation and scenery are stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p class="muted">Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
+    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. Track elevation and scenery are stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p class="muted">Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
   );
 el("help-button").onclick = () =>
   showDialog(
     "Take the controls.",
-    `<div class="shortcut"><span>Play / pause</span><kbd>Space</kbd></div><div class="shortcut"><span>Seek 10 seconds</span><span><kbd>←</kbd> <kbd>→</kbd></span></div><div class="shortcut"><span>Previous / next lap</span><span><kbd>[</kbd> <kbd>]</kbd></span></div><div class="shortcut"><span>Switch camera</span><kbd>C</kbd></div><div class="shortcut"><span>Choose camera</span><kbd>1 — 5</kbd></div><div class="shortcut"><span>Fullscreen</span><kbd>F</kbd></div><p class="muted">In aerial view, drag to orbit, scroll to zoom, and right-drag to pan. Select any driver in the race order to follow them.</p>`,
+    `<div class="shortcut"><span>Play / pause</span><kbd>Space</kbd></div><div class="shortcut"><span>Seek 10 seconds</span><span><kbd>←</kbd> <kbd>→</kbd></span></div><div class="shortcut"><span>Previous / next lap</span><span><kbd>[</kbd> <kbd>]</kbd></span></div><div class="shortcut"><span>Switch camera</span><kbd>C</kbd></div><div class="shortcut"><span>Choose camera</span><kbd>1 — 5</kbd></div><div class="shortcut"><span>Fullscreen</span><kbd>F</kbd></div><p class="muted">In aerial view, drag to orbit, scroll to zoom, and right-drag to pan. Select any Mii in the race order to follow them.</p>`,
   );
 el("settings-button").onclick = () => {
   showDialog(
     "Replay settings",
-    `<label class="setting-row"><span><strong>Performance mode</strong><small>Lower resolution and simplified shadows</small></span><input id="low-quality" type="checkbox" ${scene?.quality === "low" ? "checked" : ""}></label><p class="muted">Telemetry interpolation runs in Rust WebAssembly. The scene renders on your GPU and adapts its resolution when frames are slow. Performance mode reduces resolution further for phones and integrated graphics.</p><div class="engine-status"><span class="green-dot"></span><span>${ready ? `Rust/WASM ready · ${playing ? `${fps} FPS` : "Paused"} · ${scene.renderer.info.render.calls} draw calls` : "Preparing replay…"}</span></div>`,
+    `<label class="setting-row"><span><strong>Performance mode</strong><small>Lower resolution and simplified shadows</small></span><input id="low-quality" class="wii-toggle" type="checkbox" ${scene?.quality === "low" ? "checked" : ""}></label><label class="setting-row"><span><strong>Menu sounds</strong><small>The little tick and pop of the Wii Menu</small></span><input id="sound-toggle" class="wii-toggle" type="checkbox" ${soundsEnabled() ? "checked" : ""}></label><p class="muted">Telemetry interpolation runs in Rust WebAssembly. The scene renders on your GPU and adapts its resolution when frames are slow. Performance mode reduces resolution further for phones and integrated graphics.</p><div class="engine-status"><span class="green-dot"></span><span>${ready ? `Rust/WASM ready · ${playing ? `${fps} FPS` : "Paused"} · ${scene.renderer.info.render.calls} draw calls` : "Preparing replay…"}</span></div>`,
   );
   el<HTMLInputElement>("low-quality").onchange = (e) =>
     scene?.setQuality((e.target as HTMLInputElement).checked);
+  el<HTMLInputElement>("sound-toggle").onchange = (e) =>
+    setSounds((e.target as HTMLInputElement).checked);
+};
+// The Wii Message Board, as race control: every message issued so far.
+function raceMessages() {
+  return meta.events.filter((e) => e.time >= 0 && e.time <= time);
+}
+el("messages-button").onclick = () => {
+  if (!ready) return;
+  const messages = raceMessages();
+  messagesRead = messages.length;
+  showDialog(
+    "Race control",
+    messages.length
+      ? `<div class="messages">${messages
+          .slice()
+          .reverse()
+          .map(
+            (m) =>
+              `<div class="message"><span class="message-time">${clock(m.time)}</span><span>${esc(m.message)}</span></div>`,
+          )
+          .join("")}</div>`
+      : `<p>No messages yet. Race control will post here once the lights go out.</p>`,
+  );
+  updateUI();
 };
 function togglePlay() {
   if (!ready) return;
@@ -266,8 +306,8 @@ function setCamera(m: CameraMode) {
       : m === "trackside"
         ? `${icon("video")} Trackside cameras follow your selected driver`
         : m === "portrait"
-          ? `${icon("user-round")} A little face behind the wheel`
-          : `${icon("navigation")} Following ${esc(meta?.drivers[focus].name_acronym ?? "driver")} <span>·</span> Choose a driver on the left`;
+          ? `${icon("user-round")} Say hello to your Mii`
+          : `${icon("navigation")} Following ${esc(meta?.drivers[focus].name_acronym ?? "driver")} <span>·</span> Pick another Mii in the race order`;
   document.querySelector<HTMLElement>(".station-wrap")!.hidden =
     m !== "trackside";
   icons();
@@ -335,9 +375,6 @@ window.addEventListener("keydown", (e) => {
   else if (/^[1-5]$/.test(key)) setCamera(cameraModes[Number(key) - 1]);
 });
 
-function avatar(d: Driver, index: number) {
-  return `<div class="mii-head" style="--skin:${["#edba8e", "#f1cba7", "#e7b48c", "#cb956e", "#dfac83"][index % 5]};--hair:${["#49392a", "#755033", "#332b28", "#c89655", "#5a3a29"][index % 5]}"><i class="mii-hair"></i><i class="mii-eye left"></i><i class="mii-eye right"></i><i class="mii-mouth"></i></div><div class="mii-body" style="background:#${d.team_colour}"></div>`;
-}
 function selectDriver(index: number) {
   focus = index;
   scene.setFocus(index);
@@ -345,8 +382,9 @@ function selectDriver(index: number) {
   el("focus-name").textContent = `${d.first_name} ${d.last_name}`;
   el("focus-team").textContent = d.team_name;
   el("focus-number").textContent = `#${d.driver_number}`;
-  el("avatar").innerHTML = avatar(d, index);
-  el("avatar").style.background = `#${d.team_colour}25`;
+  el("avatar").innerHTML = portraits[index]
+    ? `<img src="${portraits[index]}" alt="${esc(d.full_name)}'s Mii">`
+    : "";
   el("focus-card").style.setProperty("--team", `#${d.team_colour}`);
   rows.forEach((row, i) => {
     row.classList.toggle("following", i === index);
@@ -368,7 +406,8 @@ function updateUI() {
   const t = el<HTMLInputElement>("timeline");
   t.value = String(time);
   t.style.setProperty("--progress", `${(time / meta.duration) * 100}%`);
-  el("current-time").textContent = clock(time);
+  const elapsed = clock(time);
+  setLcd(el("current-time"), elapsed, `Elapsed ${elapsed}`);
   const lead =
     meta.drivers.find((d) => latest(d.position_events, time)?.position === 1) ??
     meta.drivers[0];
@@ -392,8 +431,8 @@ function updateUI() {
   });
   frame = engine.frame(time);
   const k = focus * 16;
-  el("speed").textContent =
-    frame[k + 13] > 3 ? "—" : String(Math.round(frame[k + 4]));
+  const speed = frame[k + 13] > 3 ? "—" : String(Math.round(frame[k + 4]));
+  setLcd(el("speed"), speed, speed === "—" ? "No speed data" : `${speed} km/h`);
   el("gear").textContent =
     frame[k + 7] > 0 ? String(Math.round(frame[k + 7])) : "N";
   el("throttle").style.width = `${frame[k + 5]}%`;
@@ -407,17 +446,25 @@ function updateUI() {
   tire.setAttribute("title", compound || "No tyre data");
   tire.style.color =
     compound === "SOFT"
-      ? "#c66253"
+      ? "#e2382c"
       : compound === "HARD"
-        ? "#627468"
-        : "#b09339";
-  const events = meta.events.filter((e) => e.time >= 0 && e.time <= time);
+        ? "#8b8b8b"
+        : "#e0ac10";
+  const events = raceMessages();
   const event = events[events.length - 1];
   el("event-caption").textContent = event
     ? event.message
     : time < 3
       ? "Lights out in São Paulo"
       : "Racing at Interlagos";
+  messagesRead = Math.min(messagesRead, events.length);
+  const unread = events.length - messagesRead;
+  el("message-count").textContent = String(unread);
+  el("message-count").hidden = unread === 0;
+  el("messages-button").setAttribute(
+    "aria-label",
+    unread ? `Race control messages, ${unread} new` : "Race control messages",
+  );
   const lastSafety = events
     .filter(
       (e) => e.category === "SafetyCar" || /SAFETY CAR|VSC/.test(e.message),
@@ -435,7 +482,7 @@ function updateUI() {
   const note = el("status-note");
   note.hidden = !(out || dataGap);
   note.textContent = out
-    ? `${d.name_acronym} retired · select another driver to follow`
+    ? `${d.name_acronym} retired · select another Mii to follow`
     : dataGap
       ? `${d.name_acronym} · telemetry gap (${Math.round(frame[k + 13])}s)`
       : "";
@@ -453,6 +500,7 @@ function updateUI() {
     speed: frame[k + 4],
     carPosition: [frame[k], frame[k + 1]],
     visible: scene.cars.filter((c) => c.visible).length,
+    portraits: portraits.filter(Boolean).length,
   };
 }
 
@@ -484,11 +532,12 @@ function drawMap(ranking: { d: Driver; i: number; p: number }[]) {
     i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y),
   );
   ctx.closePath();
-  ctx.strokeStyle = "#58745d40";
-  ctx.lineWidth = 7;
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#b9b9b9";
+  ctx.lineWidth = 9;
   ctx.stroke();
-  ctx.strokeStyle = "#fcfff1";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 5;
   ctx.stroke();
   ranking.forEach(({ d, i }) => {
     const k = i * 16;
@@ -496,14 +545,12 @@ function drawMap(ranking: { d: Driver; i: number; p: number }[]) {
     const x = mapOffsetX + (frame[k] - mapMinX) * mapScale,
       y = mapOffsetY + (frame[k + 1] - mapMinY) * mapScale;
     ctx.beginPath();
-    ctx.arc(x, y, i === focus ? 7 : 4, 0, Math.PI * 2);
+    ctx.arc(x, y, i === focus ? 8 : 5, 0, Math.PI * 2);
     ctx.fillStyle = `#${d.team_colour}`;
     ctx.fill();
-    if (i === focus) {
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = "#fcfff1";
-      ctx.stroke();
-    }
+    ctx.lineWidth = i === focus ? 3.5 : 1.5;
+    ctx.strokeStyle = i === focus ? "#34beed" : "#ffffff";
+    ctx.stroke();
   });
 }
 
@@ -525,6 +572,10 @@ async function init() {
       );
     meta = JSON.parse(new TextDecoder().decode(metadataBytes));
     el("duration").textContent = clock(meta.duration);
+    // The Wii Menu shows the date as "Fri 6/7"; this is race day.
+    const raceDay = new Date(meta.session.date_start);
+    el("race-date").textContent =
+      `${raceDay.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })} ${raceDay.getUTCMonth() + 1}/${raceDay.getUTCDate()}`;
     document.querySelectorAll(".timeline-labels span").forEach((label, i) => {
       if (i > 0 && i < 4) label.textContent = clock((meta.duration * i) / 4);
     });
@@ -535,8 +586,12 @@ async function init() {
         `Loading real race telemetry · ${Math.round(f * 100)}%`;
     });
     el("load-label").textContent = "Building your little Interlagos…";
+    await document.fonts
+      .load('500 25px "Zen Kaku Gothic New"')
+      .catch(() => undefined);
     await new Promise((r) => setTimeout(r, 30));
     scene = new ReplayScene(el("scene"), meta);
+    portraits = miiPortraits(scene.miis, scene.atlas);
     scene.onStationChange = (name) => {
       el("station-name").textContent = name;
     };
@@ -548,7 +603,7 @@ async function init() {
       row.className = "driver-row";
       row.dataset.driver = String(d.driver_number);
       row.setAttribute("aria-label", `Follow ${d.full_name}`);
-      row.innerHTML = `<span class="driver-pos">${String(i + 1).padStart(2, "0")}</span><span class="team-line" style="background:#${d.team_colour}"></span><span class="driver-info"><strong>${esc(d.name_acronym)}</strong><small>${esc(d.team_name)}</small></span><span class="driver-gap">—</span>`;
+      row.innerHTML = `<span class="driver-pos">${String(i + 1).padStart(2, "0")}</span><span class="team-line" style="background:#${d.team_colour}"></span>${portraits[i] ? `<img class="driver-mii" src="${portraits[i]}" alt="" width="40" height="40">` : ""}<span class="driver-info"><strong>${esc(d.name_acronym)}</strong><small>${esc(d.team_name)}</small></span><span class="driver-gap">—</span>`;
       row.onclick = () => selectDriver(i);
       rows.set(i, row);
       el("driver-list").append(row);
@@ -575,9 +630,9 @@ async function init() {
     el("loading").classList.add("loaded");
     setTimeout(() => el("loading").remove(), 600);
     document
-      .querySelectorAll<
-        HTMLButtonElement | HTMLInputElement
-      >(".transport [disabled]")
+      .querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+        ".transport [disabled]",
+      )
       .forEach((b) => (b.disabled = false));
     focus = Math.max(
       0,
@@ -626,8 +681,12 @@ async function init() {
       error instanceof Error
         ? error.message
         : "The replay could not be loaded.";
-    el("loading").innerHTML +=
-      `<button class="retry-button" onclick="location.reload()">Try again</button>`;
+    el("loading")
+      .querySelector(".hs")
+      ?.insertAdjacentHTML(
+        "beforeend",
+        `<button class="pill-button retry-button" onclick="location.reload()">Try again</button>`,
+      );
     console.error(error);
   }
 }

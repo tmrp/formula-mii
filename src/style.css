@@ -1,18 +1,57 @@
+/* Formula Mii, styled after the Wii Menu: a pinstriped silver backdrop,
+   channel-tile frames, glossy white buttons that glow Wii blue under the
+   pointer, and the curved bottom bar with its clock. */
 :root {
-  font-family: "DM Sans", sans-serif;
-  color: #284736;
-  background: #f4f6ef;
+  font-family: "Zen Kaku Gothic New", "Helvetica Neue", Arial, sans-serif;
+  color: var(--ink);
+  background: var(--page);
   font-synthesis: none;
-  --ink: #284736;
-  --muted: #829082;
-  --line: #dfe5d9;
-  --team: #ee8426;
+  --ink: #3c3c3c;
+  --ink-soft: #5f5f5f;
+  --muted: #8c8c8c;
+  --faint: #b2b2b2;
+  --page: #ececec;
+  --wii: #34beed;
+  --wii-deep: #12a3dd;
+  --wii-soft: #d6f3fc;
+  --wii-glow:
+    0 0 0 3px rgba(52, 190, 237, 0.32), 0 0 12px rgba(52, 190, 237, 0.6);
+  --tile-edge: #c6c6c6;
+  --team: #ff6e19;
+  --spring: cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 * {
   box-sizing: border-box;
 }
+html,
+button,
+select,
+input,
+a,
+label,
+canvas {
+  cursor:
+    url("/cursor-hand.svg") 14 2,
+    auto;
+}
+button,
+select,
+a,
+label {
+  cursor:
+    url("/cursor-hand.svg") 14 2,
+    pointer;
+}
+.scene canvas:active {
+  cursor:
+    url("/cursor-grab.svg") 16 16,
+    grabbing;
+}
 body {
   margin: 0;
+  min-height: 100vh;
+  /* The Wii Menu's fine horizontal pinstripes. */
+  background: repeating-linear-gradient(180deg, #f4f4f4 0 2px, #e8e8e8 2px 4px);
 }
 button,
 a,
@@ -24,17 +63,18 @@ button,
 input,
 select {
   font: inherit;
+  color: inherit;
 }
 button {
-  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
 }
 button:disabled,
-input:disabled {
+input:disabled,
+select:disabled {
   cursor: wait;
   opacity: 0.5;
-}
-button {
-  color: inherit;
 }
 a {
   color: inherit;
@@ -42,282 +82,456 @@ a {
 svg {
   width: 18px;
   height: 18px;
-  stroke-width: 1.7;
+  stroke-width: 2;
   flex-shrink: 0;
 }
 button:focus-visible,
 a:focus-visible,
 select:focus-visible,
 input:focus-visible {
-  outline: 3px solid #5b8e68;
-  outline-offset: 4px;
-}
-button {
-  border: 0;
-}
-button:hover {
-  filter: brightness(0.96);
+  outline: 3px solid var(--wii);
+  outline-offset: 3px;
 }
 [hidden] {
   display: none !important;
 }
+
+/* ---- Wii buttons ---------------------------------------------------- */
+/* Every button is glossy white plastic; hovering grows it slightly with a
+   springy bounce and rings it in Wii blue. */
+.pill-button,
+.round-button,
+.square-button,
+.camera-option,
+.driver-row,
+.speed-select,
+.keyboard-help,
+kbd {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f7f7 46%, #e7e7e7 100%);
+  border: 2px solid #d0d0d0;
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 2px 3px rgba(0, 0, 0, 0.1);
+  color: var(--ink);
+  transition:
+    transform 0.16s var(--spring),
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.pill-button:not(:disabled):hover,
+.round-button:not(:disabled):hover,
+.square-button:not(:disabled):hover,
+.camera-option:hover,
+.driver-row:hover,
+.speed-select:not(:disabled):hover,
+.keyboard-help:hover {
+  border-color: var(--wii);
+  box-shadow:
+    var(--wii-glow),
+    inset 0 1px 0 #ffffff;
+  transform: scale(1.05);
+}
+.pill-button:not(:disabled):active,
+.round-button:not(:disabled):active,
+.square-button:not(:disabled):active,
+.camera-option:active,
+.driver-row:active {
+  transform: scale(0.97);
+}
+/* Like "Wii Menu" and "Start" on a channel screen: a capsule with a blue rim
+   and a highlight across its top half. */
+.pill-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 22px;
+  border: 3px solid var(--wii);
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+}
+.pill-button::before {
+  content: "";
+  position: absolute;
+  inset: 2px 10px auto;
+  height: 45%;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 255, 255, 0)
+  );
+  pointer-events: none;
+}
+.pill-button > * {
+  position: relative;
+}
+.pill-button svg {
+  color: var(--wii-deep);
+}
+.pill-button.wide {
+  min-width: 220px;
+  height: 54px;
+  font-size: 21px;
+}
+/* The round Wii and message buttons in the corners of the Wii Menu. */
+.round-button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 3px solid var(--wii);
+  background: radial-gradient(
+    circle at 50% 28%,
+    #ffffff 0%,
+    #f3f3f3 42%,
+    #d9d9d9 100%
+  );
+  box-shadow:
+    0 0 0 4px #f6f6f6,
+    0 0 0 6px #c9c9c9,
+    0 4px 10px 6px rgba(0, 0, 0, 0.07);
+  color: #8d8d8d;
+}
+.round-button:not(:disabled):hover {
+  box-shadow:
+    0 0 0 4px #f6f6f6,
+    0 0 0 6px #c9c9c9,
+    0 0 16px 8px rgba(52, 190, 237, 0.45);
+}
+.round-button.small {
+  width: 38px;
+  height: 38px;
+  border-width: 2px;
+  box-shadow:
+    0 0 0 2px #f6f6f6,
+    0 0 0 3px #c9c9c9,
+    0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.round-button.small:not(:disabled):hover {
+  box-shadow:
+    0 0 0 2px #f6f6f6,
+    0 0 0 3px #c9c9c9,
+    0 0 12px 4px rgba(52, 190, 237, 0.5);
+}
+.round-button.small svg {
+  width: 17px;
+  height: 17px;
+}
+.round-button.big {
+  width: 84px;
+  height: 84px;
+}
+.round-button.big svg {
+  width: 30px;
+  height: 30px;
+  stroke-width: 2.2;
+}
+.square-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #7d7d7d;
+}
+.square-button svg {
+  width: 19px;
+  height: 19px;
+}
+/* The cyan page-turn arrows from the edges of the Wii Menu. */
+.wii-arrow {
+  width: 22px;
+  height: 28px;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #8fe2fb 0%, #34beed 55%, #12a3dd 100%);
+  clip-path: polygon(10% 0, 100% 50%, 10% 100%);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+  transition: transform 0.16s var(--spring);
+}
+.wii-arrow.left {
+  transform: scaleX(-1);
+}
+.wii-arrow:hover {
+  transform: scale(1.18);
+}
+.wii-arrow.left:hover {
+  transform: scale(-1.18, 1.18);
+}
+/* A Wii settings toggle. */
+.wii-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 58px;
+  height: 32px;
+  margin: 0;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2px solid #c9c9c9;
+  background: linear-gradient(180deg, #d9d9d9, #ececec);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.15);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.wii-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #ffffff, #e2e2e2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.18s var(--spring);
+}
+.wii-toggle:checked {
+  background: linear-gradient(180deg, #2fb4e6, #6ad6f7);
+  border-color: #1ea7df;
+}
+.wii-toggle:checked::after {
+  transform: translateX(26px);
+}
+
+/* ---- Channel tiles -------------------------------------------------- */
+.tile {
+  background: #ffffff;
+  border-radius: 26px;
+  border: 4px solid #ffffff;
+  box-shadow:
+    0 0 0 2px var(--tile-edge),
+    inset 0 0 0 1px #e1e1e1,
+    0 5px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* ---- Header (Wii Shop Channel title bar) ---------------------------- */
 .header {
-  height: 91px;
-  border-bottom: 1px solid var(--line);
+  position: relative;
+  height: 78px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 46px;
-  background: #fafbf6;
+}
+.header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: radial-gradient(circle, #8fd6f0 1.3px, transparent 1.8px) 0 50% /
+    8px 4px repeat-x;
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
   text-decoration: none;
-  font-family: Manrope, sans-serif;
-  font-size: 27px;
-  font-weight: 800;
-  letter-spacing: -1.4px;
 }
-.brand-light {
-  font-weight: 500;
-  margin-left: 2px;
-}
-.brand-dot {
-  font-size: 10px;
-  vertical-align: top;
-  position: relative;
-  top: 6px;
-  margin-left: 3px;
-  letter-spacing: 0;
+.brand-badge {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 30%, #ffffff, #e2e2e2);
+  border: 3px solid var(--wii);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 3px #cfcfcf;
+  overflow: hidden;
 }
 .brand-mark {
-  width: 41px;
-  height: 40px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: #284d37;
-  color: #eff3cf;
-  border-radius: 13px;
-  transform: rotate(-5deg);
-  font-size: 33px;
-  font-style: italic;
-  letter-spacing: -10px;
-  padding-right: 10px;
-  line-height: 1;
+  width: 46px;
+  height: 46px;
+  margin-top: 4px;
 }
-.brand-mark span {
-  font-size: 24px;
-  transform: translateY(2px);
+.brand-name {
+  color: var(--wii-deep);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
 }
 .header-center {
-  font-size: 12px;
-  color: #7b887b;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  letter-spacing: 0.2px;
-}
-.green-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #6d9471;
-  display: inline-block;
+  font-size: 15px;
+  color: var(--muted);
 }
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 19px;
+  gap: 18px;
 }
-.text-button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: none;
-  font-size: 12px;
-  font-weight: 500;
-}
-.header-divider {
-  height: 18px;
-  width: 1px;
-  background: #d8dfd3;
-}
-.icon-button {
-  width: 34px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border-radius: 8px;
-}
-.icon-button:hover {
-  background: #e8ede2;
-}
-.header .icon-button {
-  width: 26px;
-}
-main {
+
+/* ---- Page ----------------------------------------------------------- */
+.page {
   max-width: 1800px;
-  margin: auto;
-  padding: 33px 46px 0;
+  margin: 0 auto;
+  padding: 24px 46px 0;
 }
 .race-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 .eyebrow {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1.4px;
+  color: var(--muted);
 }
 .flag-brazil {
-  font-size: 18px;
-  line-height: 20px;
-  letter-spacing: 0;
+  width: 26px;
+  height: 18px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px #d5d5d5;
 }
 .eyebrow-dot {
-  color: #b2beae;
-  margin: 0 2px;
+  color: var(--faint);
 }
 h1 {
-  font-family: Manrope, sans-serif;
-  font-size: clamp(25px, 2.5vw, 39px);
-  font-weight: 800;
-  letter-spacing: -1.6px;
-  margin: 5px 0 7px;
-}
-.title-dot {
-  color: #89a05e;
+  font-size: clamp(28px, 2.8vw, 42px);
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  margin: 6px 0 4px;
+  color: #383838;
 }
 .race-heading p {
-  font-size: 12px;
-  color: #7c8a7b;
+  font-size: 15px;
+  color: var(--muted);
   margin: 0;
 }
+/* Value-over-label boxes, like the Wii Points counter in the Shop Channel. */
 .race-stats {
   display: flex;
-  align-items: center;
-  gap: 34px;
+  align-items: stretch;
+  gap: 14px;
 }
 .race-stats > div {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-}
-.stat-label {
-  font-size: 8px;
-  letter-spacing: 1.25px;
-  color: #8e9c8a;
-  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 128px;
+  padding: 9px 18px 8px;
+  background: #ffffff;
+  border: 2px solid #bfe5f4;
+  border-radius: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 .race-stats strong {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--wii-deep);
 }
 .race-stats small {
-  font-size: 10px;
-  color: #84917e;
-  font-weight: 500;
+  font-size: 13px;
+  color: var(--wii-deep);
+}
+.stat-label {
+  font-size: 12px;
+  color: var(--muted);
 }
 .poc-badge {
-  font-size: 8px;
+  align-self: center;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
-  border: 1px solid #dce4d0;
-  background: #ebf0df;
-  border-radius: 20px;
-  padding: 10px 12px;
-  margin-left: 4px;
-  align-self: center;
+  color: var(--wii-deep);
+  border: 2px solid var(--wii);
+  background: var(--wii-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
 }
 .replay-shell {
   display: grid;
-  grid-template-columns: 239px minmax(0, 1fr);
-  height: clamp(470px, 60vh, 760px);
+  grid-template-columns: 272px minmax(0, 1fr);
+  gap: 18px;
+  height: clamp(470px, 58vh, 760px);
   min-height: 470px;
-  border: 1px solid #dae2d4;
-  border-radius: 15px;
-  overflow: hidden;
-  box-shadow: 0 6px 22px #31422904;
 }
+
+/* ---- Race order ----------------------------------------------------- */
 .standings {
-  background: #fbfcf7;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #dde4d5;
   min-height: 0;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff, #f6f6f6);
 }
 .panel-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 19px 12px;
+  padding: 16px 18px 8px;
 }
 h2 {
-  font-family: Manrope, sans-serif;
-  letter-spacing: -0.5px;
-  font-weight: 750;
-  font-size: 16px;
+  font-weight: 500;
+  font-size: 21px;
   margin: 0;
 }
-.live-tag {
-  font-size: 7px;
-  letter-spacing: 0.7px;
-  font-weight: 600;
-  color: #74956e;
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.panel-title h2 {
+  color: var(--wii-deep);
 }
-.live-tag span {
-  height: 4px;
-  width: 4px;
-  background: #7a9a71;
-  border-radius: 100%;
+.live-tag {
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(180deg, #6ad6f7, #22aee6);
+  border-radius: 999px;
+  padding: 4px 9px;
 }
 .standings-sub {
   display: flex;
   justify-content: space-between;
-  padding: 0 19px 18px;
-  border-bottom: 1px solid #edf0e7;
-  font-size: 9px;
-  letter-spacing: 0.5px;
+  align-items: center;
+  padding: 2px 18px 12px;
+  font-size: 13px;
   font-weight: 700;
+  color: var(--ink-soft);
+  background: radial-gradient(circle, #9edbf1 1.2px, transparent 1.6px) 0 100% /
+    8px 4px repeat-x;
 }
 .standings-sub em {
   font-style: normal;
-  color: #9ca996;
-  margin-left: 2px;
+  font-weight: 500;
+  color: var(--faint);
 }
-.standings-sub > span:last-child {
-  font-size: 7px;
-  background: #eef3e8;
-  padding: 4px 5px;
-  border-radius: 4px;
-  color: #7e986f;
-  margin-top: -3px;
+#race-state {
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #ececec;
+  border: 1px solid #d6d6d6;
+  color: var(--ink-soft);
 }
-.standings-sub .yellow {
-  background: #fff0c2 !important;
-  color: #9d7e27 !important;
+#race-state.yellow {
+  background: #fff2b3;
+  border-color: #f1cf3b;
+  color: #8a6a00;
 }
 .standing-columns {
   display: grid;
-  grid-template-columns: 34px 1fr 35px;
-  padding: 12px 18px 7px;
-  font-size: 7px;
-  letter-spacing: 0.7px;
-  color: #a4aea0;
+  grid-template-columns: 30px 1fr 50px;
+  padding: 10px 22px 4px;
+  font-size: 10px;
+  letter-spacing: 0.8px;
+  color: var(--faint);
 }
 .standing-columns span:last-child {
   text-align: right;
@@ -325,66 +539,62 @@ h2 {
 .driver-list {
   display: flex;
   flex-direction: column;
+  gap: 6px;
   overflow-y: auto;
   flex: 1;
+  padding: 4px 12px 10px;
   scrollbar-width: thin;
-  scrollbar-color: #d3ddca transparent;
-  padding: 0 7px;
+  scrollbar-color: #c8c8c8 transparent;
 }
 .driver-row {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   position: relative;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  height: 40px;
-  background: transparent;
+  height: 50px;
   text-align: left;
-  padding: 0 11px;
-  border-radius: 6px;
-  margin: 1px 0;
-}
-.driver-row:hover {
-  background: #eff3e8;
+  padding: 0 10px 0 8px;
+  border-radius: 14px;
 }
 .driver-row.following {
-  background: #e6eddb;
-}
-.driver-row.following:before {
-  content: "";
-  position: absolute;
-  left: -7px;
-  height: 24px;
-  background: #536f45;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
+  border-color: var(--wii);
+  background: linear-gradient(180deg, #f1fbff 0%, #d9f3fd 50%, #c3ebfa 100%);
 }
 .driver-pos {
-  font-family: Manrope, sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  width: 15px;
-  color: #83907d;
+  font-size: 14px;
+  font-weight: 500;
+  width: 20px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .team-line {
-  height: 21px;
-  width: 3px;
-  border-radius: 3px;
+  height: 26px;
+  width: 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.driver-mii {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  margin: 0 -2px;
 }
 .driver-info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
+  min-width: 0;
 }
 .driver-info strong {
-  font-size: 11px;
-  letter-spacing: 0.4px;
+  font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.4px;
 }
 .driver-info small {
-  font-size: 7px;
-  color: #8d9986;
+  font-size: 11px;
+  color: var(--muted);
   white-space: nowrap;
   max-width: 96px;
   overflow: hidden;
@@ -392,33 +602,38 @@ h2 {
 }
 .driver-gap {
   margin-left: auto;
-  font-size: 9px;
-  color: #7f8e77;
+  font-size: 12px;
+  color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
 }
-.retired .driver-info {
-  opacity: 0.5;
+.retired .driver-info,
+.retired .driver-mii {
+  opacity: 0.45;
 }
 .retired .driver-gap {
-  color: #9da497;
+  color: var(--faint);
 }
 .standing-footer {
-  border-top: 1px solid #e7ecdf;
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 13px 19px;
-  font-size: 8px;
-  color: #93a087;
+  padding: 12px 18px;
+  font-size: 12px;
+  color: var(--muted);
+  background: radial-gradient(circle, #9edbf1 1.2px, transparent 1.6px) 0 0 /
+    8px 4px repeat-x;
 }
 .standing-footer svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
+  color: var(--wii-deep);
 }
+
+/* ---- Stage ---------------------------------------------------------- */
 .stage {
   position: relative;
   overflow: hidden;
-  background: #cfe3e2;
+  background: #bfe6f5;
   min-width: 0;
 }
 .scene {
@@ -438,17 +653,17 @@ h2 {
   inset: 0;
   background: linear-gradient(
     180deg,
-    #eff6e33a 0%,
-    transparent 27%,
-    transparent 70%,
-    #4e796b18
+    rgba(255, 255, 255, 0.22) 0%,
+    transparent 24%,
+    transparent 74%,
+    rgba(0, 0, 0, 0.08)
   );
 }
 .stage-top {
   position: absolute;
-  top: 17px;
-  left: 20px;
-  right: 17px;
+  top: 16px;
+  left: 18px;
+  right: 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -458,48 +673,37 @@ h2 {
   pointer-events: auto;
 }
 .location-chip {
-  border: 1px solid #eff5eaa3;
   display: flex;
   align-items: center;
   gap: 7px;
-  background: #f9fcf5b5;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 7px;
-  font-weight: 600;
-  letter-spacing: 0.7px;
-  color: #527761;
+  background: rgba(255, 255, 255, 0.92);
+  border: 2px solid #d4d4d4;
+  border-radius: 999px;
+  padding: 7px 14px 7px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.8px;
+  color: var(--ink-soft);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 .location-chip svg {
-  width: 12px;
-  height: 12px;
-}
-.floating-button {
-  width: 31px;
-  height: 31px;
-  border-radius: 7px;
-  background: #f9fcf5c9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.floating-button svg {
   width: 14px;
   height: 14px;
+  color: var(--wii-deep);
 }
 .camera-panel {
   position: absolute;
-  right: 17px;
-  top: 63px;
-  width: 145px;
-  border: 1px solid #f8fcf08c;
-  background: #f7fbf0dd;
-  border-radius: 10px;
-  padding: 11px 7px;
-  box-shadow: 0 4px 15px #33543d09;
+  right: 16px;
+  top: 68px;
+  width: 168px;
+  padding: 10px 8px 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #d4d4d4;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 .camera-header {
-  padding: 0 6px 9px;
+  padding: 0 6px 8px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -508,508 +712,506 @@ h2 {
   display: flex;
   gap: 6px;
   align-items: center;
-  font-size: 7px;
-  letter-spacing: 1px;
-  font-weight: 700;
-  color: #7f9275;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--wii-deep);
 }
 .camera-header svg {
-  height: 11px;
-  width: 11px;
+  height: 15px;
+  width: 15px;
 }
 .key-hint {
-  font-size: 7px;
-  border: 1px solid #d8e2ca;
+  font-size: 11px;
+  border: 1.5px solid #cfcfcf;
+  background: #f7f7f7;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  width: 15px;
-  height: 15px;
-  color: #94a087;
+  border-radius: 6px;
+  width: 20px;
+  height: 20px;
+  color: var(--muted);
+}
+.camera-options {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 .camera-option {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 32px;
-  border-radius: 5px;
+  height: 36px;
+  border-radius: 12px;
   width: 100%;
-  background: none;
-  padding: 0 8px;
-  font-size: 10px;
+  padding: 0 10px;
+  font-size: 14px;
   font-weight: 500;
   text-align: left;
 }
 .camera-option svg {
-  height: 14px;
-  width: 14px;
-  color: #8eaa80;
+  height: 16px;
+  width: 16px;
+  color: var(--wii-deep);
 }
 .camera-option.selected {
-  background: #31533c;
-  color: #f0f4e2;
+  background: linear-gradient(180deg, #8fe2fb 0%, #3cc2ef 48%, #19a7e0 100%);
+  border-color: #1aa3dc;
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgba(0, 60, 90, 0.4);
 }
 .camera-option.selected svg {
-  color: #dbe9c5;
+  color: #ffffff;
 }
 .camera-num {
   margin-left: auto;
-  font-size: 7px;
-  opacity: 0.5;
+  font-size: 11px;
+  opacity: 0.55;
 }
 .station-wrap {
-  border-top: 1px solid #dce4d0;
-  margin: 9px 3px 0;
+  margin: 9px 4px 0;
   padding-top: 10px;
+  background: radial-gradient(circle, #9edbf1 1.2px, transparent 1.6px) 0 0 /
+    8px 4px repeat-x;
 }
 .station-wrap label {
-  font-size: 6px;
-  letter-spacing: 0.8px;
+  font-size: 11px;
   display: block;
   margin-bottom: 5px;
-  color: #8f9c82;
+  color: var(--muted);
 }
 .station-wrap select {
   width: 100%;
-  font-size: 9px;
-  max-width: 130px;
-  border: 1px solid #d4dfc9;
-  border-radius: 4px;
-  background: #edf3e3;
-  color: var(--ink);
-  padding: 5px 2px;
+  font-size: 12px;
+  border: 2px solid #d0d0d0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #ededed);
+  padding: 5px 4px;
 }
 .station-wrap > span {
-  font-size: 7px;
+  font-size: 11px;
   display: block;
   line-height: 1.4;
-  color: #859879;
+  color: var(--ink-soft);
   margin-top: 5px;
+}
+/* Channel names on the Wii Menu: white lettering with a dark outline. */
+.scene-instruction,
+.track-sign {
+  color: #ffffff;
+  text-shadow:
+    0 0 2px #3a3a3a,
+    0 0 2px #3a3a3a,
+    0 0 1px #3a3a3a,
+    0 2px 4px rgba(0, 0, 0, 0.35);
 }
 .scene-instruction {
   position: absolute;
-  left: 21px;
-  bottom: 100px;
+  left: 20px;
+  bottom: 112px;
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 8px;
-  color: #f8fff0;
-  text-shadow: 0 1px 4px #30554180;
+  font-size: 13px;
+  font-weight: 500;
 }
 .scene-instruction svg {
-  width: 11px;
-  height: 11px;
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 1.5px #3a3a3a);
 }
 .scene-instruction span {
-  opacity: 0.5;
   margin: 0 2px;
 }
 .track-sign {
   position: absolute;
-  left: 21px;
-  top: 65px;
+  left: 20px;
+  top: 68px;
   display: flex;
   flex-direction: column;
-  color: #4a6c5c;
-  gap: 4px;
+  gap: 1px;
 }
 .track-sign span {
-  font-size: 8px;
-  letter-spacing: 3px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 500;
 }
 .track-sign strong {
-  font-size: 10px;
-  font-weight: 450;
+  font-size: 14px;
+  font-weight: 500;
 }
 .focus-card {
   position: absolute;
-  left: 20px;
-  bottom: 19px;
-  background: #fcfef3ed;
-  border: 1px solid #fafdf9;
-  box-shadow: 0 4px 16px #29483912;
-  border-radius: 11px;
+  left: 18px;
+  bottom: 18px;
   display: flex;
   align-items: center;
-  height: 65px;
-  padding: 9px 14px 9px 9px;
-  gap: 11px;
-  max-width: calc(100% - 40px);
+  height: 82px;
+  max-width: calc(100% - 36px);
+  padding: 8px 18px 8px 8px;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 3px solid #ffffff;
+  border-radius: 22px;
+  box-shadow:
+    0 0 0 2px var(--tile-edge),
+    0 5px 14px rgba(0, 0, 0, 0.12);
 }
+/* Mii icons sit on a soft sky tile, as in the Mii Channel. */
 .avatar {
-  height: 45px;
-  width: 42px;
-  border-radius: 8px;
+  height: 62px;
+  width: 62px;
+  border-radius: 16px;
   overflow: hidden;
-  position: relative;
   flex-shrink: 0;
+  background: linear-gradient(180deg, #ffffff 0%, #dcf3fc 100%);
+  border: 2px solid #cfeaf6;
 }
-.mii-head {
-  width: 24px;
-  height: 29px;
-  position: absolute;
-  top: 6px;
-  left: 9px;
-  border-radius: 45% 45% 42% 42%;
-  background: var(--skin);
-  z-index: 2;
-  box-shadow: 1px 1px 1px #0001;
-}
-.mii-hair {
-  position: absolute;
-  width: 27px;
-  height: 11px;
-  background: var(--hair);
-  top: -2px;
-  left: -1.5px;
-  border-radius: 65% 65% 25% 40%;
-  transform: rotate(-8deg);
-}
-.mii-eye {
-  position: absolute;
-  background: #313929;
-  width: 3px;
-  height: 4px;
-  border-radius: 50%;
-  top: 14px;
-}
-.mii-eye.left {
-  left: 5px;
-}
-.mii-eye.right {
-  right: 5px;
-}
-.mii-mouth {
-  position: absolute;
-  border-bottom: 1.5px solid #866342;
-  width: 7px;
-  height: 4px;
-  bottom: 5px;
-  left: 9px;
-  border-radius: 50%;
-}
-.mii-body {
-  position: absolute;
-  width: 30px;
-  height: 19px;
-  border-radius: 50% 50% 0 0;
-  bottom: -4px;
-  left: 6px;
+.avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .focus-identity {
   display: flex;
   flex-direction: column;
-  min-width: 104px;
-  gap: 3px;
+  min-width: 126px;
+  gap: 1px;
 }
 .focus-label {
-  font-size: 6px;
+  font-size: 10px;
   letter-spacing: 1px;
-  color: #8b9a80;
-  font-weight: 600;
+  color: var(--muted);
+  font-weight: 500;
 }
 .focus-label span {
   letter-spacing: 0;
-  color: #a8b19e;
+  color: var(--wii-deep);
   margin-left: 4px;
 }
 .focus-identity strong {
-  font-size: 12px;
-  letter-spacing: -0.2px;
+  font-size: 17px;
   font-weight: 700;
 }
 .focus-identity > span:last-child {
-  font-size: 8px;
-  color: #87947d;
+  font-size: 12px;
+  color: var(--muted);
 }
 .focus-divider {
-  width: 1px;
-  height: 29px;
-  background: #dce3d3;
-  margin: 0 3px;
+  width: 2px;
+  height: 44px;
+  background: radial-gradient(circle, #9edbf1 1.2px, transparent 1.6px) 50% 0 /
+    2px 5px repeat-y;
+  margin: 0 2px;
+}
+.lcd-value {
+  display: inline-flex;
+  align-items: center;
+}
+.lcd-value .lcd {
+  width: auto;
+  filter: drop-shadow(0 1px 0 #ffffff);
 }
 .speed {
   display: flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 5px;
+  color: #5b5b5b;
 }
 .speed strong {
-  font-family: Manrope, sans-serif;
-  font-size: 23px;
-  font-weight: 750;
-  min-width: 42px;
-  letter-spacing: -1px;
-  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  justify-content: flex-end;
+}
+.speed .lcd {
+  height: 30px;
 }
 .speed > span {
-  font-size: 6px;
-  color: #8b9a82;
-  letter-spacing: 0.3px;
+  font-size: 10px;
+  color: var(--muted);
 }
 .gear {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  margin-left: 5px;
+  gap: 1px;
+  margin-left: 4px;
 }
 .gear span {
-  font-size: 6px;
-  color: #91a187;
-  letter-spacing: 0.3px;
+  font-size: 10px;
+  color: var(--muted);
 }
 .gear strong {
-  font-size: 15px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #5b5b5b;
+  line-height: 1;
 }
 .telemetry-bars {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   margin-left: 4px;
 }
 .telemetry-bars > span {
   display: flex;
-  gap: 5px;
-  font-size: 6px;
-  color: #a0aa97;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
   align-items: center;
 }
 .telemetry-bars i {
-  width: 35px;
-  height: 3px;
+  width: 46px;
+  height: 7px;
   display: block;
-  background: #e2e8d9;
-  border-radius: 3px;
+  background: #dedede;
+  border-radius: 7px;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
   overflow: hidden;
 }
 .telemetry-bars b {
   display: block;
   height: 100%;
-  background: #89a467;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #8fe2fb, #1aa7e0);
 }
 .telemetry-bars > span:last-child b {
-  background: #d6987b;
+  background: linear-gradient(180deg, #ffb37a, #f06418);
 }
 .tire-chip {
-  border: 1px solid currentColor;
+  border: 3px solid currentColor;
+  background: #2f2f2f;
   border-radius: 50%;
-  height: 18px;
-  width: 18px;
+  height: 30px;
+  width: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
-  margin-left: 3px;
+  margin-left: 4px;
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 0 0 3px #cfcfcf;
 }
 .minimap-wrap {
   position: absolute;
-  right: 15px;
-  bottom: 13px;
-  width: 150px;
-  height: 107px;
+  right: 16px;
+  bottom: 18px;
+  width: 176px;
+  height: 128px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: #edf5df80;
-  border: 1px solid #ecf5e03d;
-  border-radius: 10px;
-  backdrop-filter: blur(7px);
+  background: rgba(255, 255, 255, 0.78);
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  box-shadow:
+    0 0 0 2px var(--tile-edge),
+    0 4px 10px rgba(0, 0, 0, 0.1);
 }
 .minimap-wrap canvas {
-  width: 140px;
-  height: 91px;
+  width: 162px;
+  height: 108px;
 }
 .minimap-wrap > span {
-  font-size: 6px;
+  font-size: 10px;
   letter-spacing: 1px;
-  color: #f4fce8;
-  margin-top: -4px;
+  color: var(--muted);
+  margin-top: -6px;
 }
 .status-note {
   position: absolute;
-  bottom: 92px;
-  left: 20px;
-  font-size: 9px;
-  background: #fff7deed;
-  border: 1px solid #e8dfbc;
-  color: #8d7842;
-  padding: 8px 11px;
-  border-radius: 7px;
+  bottom: 110px;
+  left: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #fffbe6;
+  border: 2px solid #f1cf3b;
+  color: #7a5e00;
+  padding: 7px 14px;
+  border-radius: 999px;
 }
-.status-note:not([hidden]) + .loading {
-  z-index: 10;
-}
+/* Loading: the Wii's health and safety screen, adapted. */
 .loading {
   position: absolute;
   inset: 0;
-  background: #e3eddf;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
+  background: #ffffff;
+  color: #111111;
   transition: opacity 0.5s;
-  z-index: 10;
 }
 .loading.loaded {
   opacity: 0;
   pointer-events: none;
 }
-.loading-logo {
-  font-family: Manrope, sans-serif;
-  font-size: 43px;
-  font-weight: 800;
-  font-style: italic;
-  letter-spacing: -7px;
-  background: #2e5039;
-  color: #e7efcf;
-  width: 73px;
-  height: 73px;
-  border-radius: 24px;
+.hs {
+  max-width: 620px;
+  padding: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.hs h2 {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding-right: 9px;
-  transform: rotate(-5deg);
-  margin-bottom: 25px;
+  gap: 12px;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
 }
-.loading h2 {
-  font-size: 23px;
-  letter-spacing: -1px;
+.hs-icon {
+  width: 38px;
+  height: 34px;
 }
-.loading p {
-  font-size: 11px;
-  color: #7a9075;
-  margin-top: 12px;
+.hs p {
+  margin: 18px 0 0;
+  font-size: 16px;
+  line-height: 1.55;
+  font-weight: 500;
+}
+.hs em {
+  font-style: normal;
+  font-weight: 700;
+}
+.hs .hs-small {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #555555;
 }
 .load-track {
-  width: 180px;
-  height: 3px;
-  background: #ceddc1;
-  border-radius: 10px;
-  margin-top: 10px;
+  width: 260px;
+  height: 12px;
+  margin-top: 28px;
+  border-radius: 999px;
+  background: #e2e2e2;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.25);
   overflow: hidden;
 }
 .load-track span {
   display: block;
   height: 100%;
   width: 0;
-  background: #59824b;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #8fe2fb, #1aa7e0);
   transition: width 0.2s;
 }
+#load-label {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #444444;
+}
 .loading-note {
-  font-size: 7px;
+  margin-top: 26px;
+  font-size: 11px;
   letter-spacing: 1.2px;
-  color: #9caf8e;
-  margin-top: 20px;
+  color: #777777;
+  animation: blink 1.6s ease-in-out infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
 }
 .retry-button {
-  margin-top: 20px;
-  padding: 10px 20px;
-  background: #33593f;
-  border-radius: 6px;
-  color: #fff;
+  margin-top: 22px;
 }
+
+/* ---- Transport: the Wii Menu bottom bar ----------------------------- */
 .transport {
-  background: #fbfcf7;
-  border: 1px solid #dfe5d7;
-  border-radius: 12px;
-  margin-top: 13px;
-  padding: 17px 21px 12px;
+  margin-top: 18px;
+}
+.timeline-area {
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 0 46px 8px;
 }
 .timeline-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .replay-caption {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 8px;
+  min-width: 0;
+  font-size: 12px;
   letter-spacing: 1px;
-  font-weight: 600;
-  color: #778970;
+  font-weight: 700;
+  color: var(--wii-deep);
 }
 .replay-caption svg {
-  height: 11px;
-  width: 11px;
+  height: 15px;
+  width: 15px;
 }
 .replay-caption > span {
-  font-size: 9px;
+  font-size: 13px;
   letter-spacing: 0;
-  color: #a2ac98;
-  font-weight: 400;
-  margin-left: 13px;
-  max-width: 600px;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-left: 10px;
   text-overflow: ellipsis;
   overflow: hidden;
   white-space: nowrap;
 }
-.elapsed {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-.elapsed strong {
-  font-weight: 600;
-}
-.elapsed > span {
-  color: #a5af9c;
-}
 .timeline-wrap {
   position: relative;
-  height: 10px;
+  height: 26px;
+  display: flex;
+  align-items: center;
 }
 .timeline {
   --progress: 0%;
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
-  background: linear-gradient(
-    to right,
-    #617f4d var(--progress),
-    #e3e8da var(--progress)
-  );
-  border-radius: 5px;
-  position: relative;
+  height: 14px;
   margin: 0;
   display: block;
-  cursor: pointer;
+  border-radius: 999px;
+  border: 2px solid #c9c9c9;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.5),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    linear-gradient(
+      to right,
+      var(--wii) var(--progress),
+      #dadada var(--progress)
+    );
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
   outline-offset: 6px;
 }
 .timeline::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 11px;
-  height: 11px;
-  background: #476c38;
-  border: 3px solid #f8faef;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  box-shadow: 0 0 0 1px #688553;
-  cursor: grab;
+  background: radial-gradient(circle at 50% 30%, #ffffff, #e0e0e0);
+  border: 3px solid var(--wii);
+  box-shadow:
+    0 0 0 2px #ffffff,
+    0 2px 5px rgba(0, 0, 0, 0.3);
+  cursor:
+    url("/cursor-grab.svg") 16 16,
+    grab;
+  transition: transform 0.16s var(--spring);
+}
+.timeline::-webkit-slider-thumb:hover {
+  transform: scale(1.12);
 }
 .timeline::-moz-range-thumb {
-  width: 6px;
-  height: 6px;
-  background: #476c38;
-  border: 3px solid #f8faef;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  box-shadow: 0 0 0 1px #688553;
-}
-.timeline-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 6px;
-  color: #a4af9a;
-  letter-spacing: 0.8px;
-  padding: 4px 0 14px;
+  background: radial-gradient(circle at 50% 30%, #ffffff, #e0e0e0);
+  border: 3px solid var(--wii);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
 .timeline-events {
   position: absolute;
@@ -1017,117 +1219,180 @@ h2 {
   pointer-events: none;
 }
 .event-marker {
-  height: 7px;
-  width: 5px;
-  padding: 0;
   position: absolute;
-  top: 8px;
-  background: #d3b16a;
-  border-radius: 2px;
+  top: -6px;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border-radius: 50%;
+  background: #ffd820;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px #d6a800;
   pointer-events: auto;
   z-index: 2;
   transform: translateX(-50%);
+  transition: transform 0.16s var(--spring);
 }
 .event-marker:hover {
-  height: 12px;
-  top: 5px;
+  transform: translateX(-50%) scale(1.5);
 }
-.transport-bottom {
-  border-top: 1px solid #edf0e6;
-  padding-top: 11px;
+.timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.8px;
+  padding-top: 4px;
+}
+.wii-bar {
+  --notch-depth: 54px;
+  --notch-width: 300px;
+  --notch-curve: 96px;
+  position: relative;
+  height: 148px;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto auto;
+  grid-template-areas: "play tools . lap help mail";
+  align-items: center;
+  column-gap: 22px;
+  padding: 18px 40px 0;
+}
+.bar-shape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+:where(.wii-bar > :not(.bar-shape)) {
+  position: relative;
+  z-index: 1;
+}
+#play {
+  grid-area: play;
+}
+#messages-button {
+  grid-area: mail;
+  gap: 0;
+}
+#messages-button svg {
+  width: 32px;
+  height: 26px;
+}
+.message-count {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: #8d8d8d;
+}
+.bar-tools {
+  grid-area: tools;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
 }
-.playback-buttons {
+.speed-select {
+  height: 44px;
+  margin-left: 4px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+/* The clock sits in the notch above the panel edge; the date sits below it. */
+.bar-center {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.clock {
+  height: var(--notch-depth);
   display: flex;
   align-items: center;
   gap: 10px;
+  color: #8f8f8f;
 }
-.playback-buttons .icon-button svg {
-  width: 15px;
-  height: 15px;
+.clock .lcd {
+  height: 36px;
 }
-.play-button {
-  background: #305236;
-  color: #f1f5e7;
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 2px 4px #283c3226;
+.clock-suffix {
+  align-self: flex-end;
+  margin-bottom: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #9a9a9a;
+  white-space: nowrap;
 }
-.play-button svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  stroke-width: 0;
-}
-.speed-select {
-  border: 0;
-  background: #edf1e5;
-  color: #6d8062;
-  font-size: 9px;
-  padding: 7px 9px;
-  border-radius: 5px;
-  margin-left: 9px;
-  cursor: pointer;
+.bar-date {
+  margin-top: 16px;
+  font-size: 30px;
+  font-weight: 700;
+  color: #6f6f6f;
+  text-shadow: 0 1px 0 #ffffff;
 }
 .lap-jump {
+  grid-area: lap;
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 9px;
-  color: #96a28c;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
 }
 .lap-jump label {
-  font-size: 7px;
+  font-size: 11px;
   letter-spacing: 0.9px;
-  margin-right: 6px;
+  color: var(--muted);
+  margin-right: 2px;
 }
 .lap-jump input {
-  width: 33px;
-  height: 25px;
-  border: 1px solid #dde5d3;
-  background: #f1f5e9;
-  color: #506943;
-  border-radius: 5px;
+  width: 52px;
+  height: 40px;
+  border: 2px solid #cfcfcf;
+  background: #ffffff;
+  border-radius: 12px;
   text-align: center;
-  font-size: 10px;
+  font-size: 18px;
+  font-weight: 500;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12);
   appearance: textfield;
   -moz-appearance: textfield;
 }
 .lap-jump input::-webkit-inner-spin-button {
   display: none;
 }
-.icon-button.small {
-  width: 20px;
-  height: 25px;
-}
-.icon-button.small svg {
-  width: 13px;
-}
 .keyboard-help {
+  grid-area: help;
   display: flex;
   align-items: center;
   gap: 7px;
-  background: none;
-  font-size: 9px;
-  color: #98a38e;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
 }
 .keyboard-help svg {
-  width: 15px;
-  height: 15px;
+  width: 17px;
+  height: 17px;
+  color: var(--wii-deep);
 }
 footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  height: 48px;
-  color: #a2ad97;
-  font-size: 9px;
+  gap: 12px;
+  padding: 4px 40px 14px;
+  background: #cdcdcd;
+  color: #7a7a7a;
+  font-size: 12px;
 }
 footer > span {
   display: flex;
@@ -1139,321 +1404,347 @@ footer a {
   align-items: center;
 }
 footer svg {
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
 }
-.footer-dot {
+.footer-dot,
+.green-dot {
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #97ac82;
+  background: var(--wii);
 }
 .footer-engine {
-  font-size: 6px;
+  font-size: 10px;
   letter-spacing: 0.6px;
-  background: #e9eee1;
-  border: 1px solid #e2e8d8;
-  border-radius: 4px;
-  padding: 4px 6px;
+  background: #e4e4e4;
+  border: 1px solid #bdbdbd;
+  border-radius: 6px;
+  padding: 3px 6px;
   margin-left: 8px;
 }
+
+/* ---- Dialogs: a Wii Menu prompt ------------------------------------- */
 dialog {
-  border: 1px solid #dbe3d1;
-  max-width: 510px;
+  border: 0;
+  padding: 0;
+  max-width: 580px;
   width: calc(100% - 32px);
-  padding: 27px;
-  border-radius: 18px;
-  background: #fbfcf7;
+  border-radius: 30px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
   color: var(--ink);
-  box-shadow: 0 20px 100px #263d3b38;
+  box-shadow:
+    0 0 0 3px #cfcfcf,
+    0 0 0 6px #ffffff,
+    0 0 0 8px #d9d9d9,
+    0 24px 70px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+dialog[open] {
+  animation: dialog-in 0.28s var(--spring);
+}
+@keyframes dialog-in {
+  from {
+    transform: scale(0.88);
+    opacity: 0;
+  }
 }
 dialog::backdrop {
-  background: #26443a54;
-  backdrop-filter: blur(5px);
+  background: rgba(24, 24, 24, 0.55);
 }
 .dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
+  padding: 30px 36px 4px;
+  text-align: center;
 }
 .dialog-header h2 {
-  font-size: 23px;
+  font-size: 26px;
+  color: #383838;
 }
-.dialog-header button {
-  margin-right: -7px;
+#dialog-content {
+  padding: 6px 36px 4px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: center;
+  padding: 20px 36px 26px;
+  background: repeating-linear-gradient(180deg, #f1f1f1 0 2px, #e4e4e4 2px 4px);
+  border-top: 2px solid #dadada;
 }
 dialog p {
-  font-size: 12px;
-  line-height: 1.75;
-  color: #75856c;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink-soft);
 }
 dialog strong {
-  color: #4f6945;
+  color: var(--ink);
 }
 dialog a {
-  color: #4c7144;
+  color: var(--wii-deep);
 }
 .muted {
-  font-size: 10px !important;
-  color: #9aab8d !important;
+  font-size: 13px !important;
+  color: var(--muted) !important;
 }
 .about-grid {
   display: flex;
-  justify-content: space-between;
-  border-top: 1px solid #e3e9d9;
-  border-bottom: 1px solid #e3e9d9;
-  padding: 20px 12px;
+  justify-content: space-around;
+  gap: 12px;
   margin: 20px 0;
 }
 .about-grid div {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  align-items: center;
+  gap: 2px;
+  padding: 12px;
+  background: #ffffff;
+  border: 2px solid #bfe5f4;
+  border-radius: 14px;
 }
 .about-grid strong {
-  font-family: Manrope;
-  font-size: 25px;
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--wii-deep);
 }
 .about-grid span {
-  font-size: 9px;
-  color: #8f9e82;
+  font-size: 12px;
+  color: var(--muted);
 }
 .shortcut {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #e7ecdd;
-  font-size: 12px;
-  color: #718665;
+  padding: 11px 0;
+  font-size: 15px;
+  color: var(--ink-soft);
+  background: radial-gradient(circle, #9edbf1 1.2px, transparent 1.6px) 0 100% /
+    8px 4px repeat-x;
 }
 kbd {
-  border: 1px solid #d5dfca;
-  background: #eff3e6;
-  padding: 4px 8px;
-  border-radius: 5px;
-  font-size: 10px;
-  color: #6f8662;
+  display: inline-block;
+  min-width: 30px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  font:
+    500 13px "Zen Kaku Gothic New",
+    sans-serif;
+  text-align: center;
+  color: var(--ink-soft);
 }
 .setting-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
+  gap: 20px;
+  padding: 14px 0;
+  background: radial-gradient(circle, #9edbf1 1.2px, transparent 1.6px) 0 100% /
+    8px 4px repeat-x;
 }
 .setting-row > span {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  font-size: 13px;
+  gap: 4px;
+  font-size: 16px;
 }
 .setting-row small {
-  font-size: 10px;
-  color: #92a083;
-}
-.setting-row input {
-  accent-color: #557b48;
-  width: 18px;
-  height: 18px;
+  font-size: 13px;
+  color: var(--muted);
 }
 .engine-status {
-  font-size: 10px;
-  background: #eef3e6;
-  padding: 13px;
-  border-radius: 7px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: #ffffff;
+  border: 2px solid #dcdcdc;
+  padding: 12px 14px;
+  border-radius: 14px;
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 20px;
+  gap: 8px;
+  margin: 16px 0 6px;
 }
-.replay-shell:fullscreen {
-  height: 100vh;
-  min-height: 100vh;
-  border-radius: 0;
-  grid-template-columns: 239px minmax(0, 1fr);
+/* Race control as the Wii Message Board: one letter per message. */
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0;
 }
-.replay-shell:fullscreen .stage {
-  height: 100vh;
+.message {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  background: #ffffff;
+  border: 2px solid #dcdcdc;
+  border-radius: 12px;
 }
-.replay-shell:fullscreen .focus-card {
-  bottom: 30px;
+.message-time {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--wii-deep);
+  font-variant-numeric: tabular-nums;
 }
+
+/* ---- Large screens -------------------------------------------------- */
 @media (min-width: 1600px) {
   .replay-shell {
-    grid-template-columns: 270px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
   }
   .driver-row {
-    height: 44px;
-  }
-  .driver-info strong {
-    font-size: 12px;
+    height: 54px;
   }
   .driver-info small {
-    font-size: 8px;
-  }
-  .camera-panel {
-    width: 159px;
-  }
-  .camera-option {
-    height: 35px;
-    font-size: 11px;
-  }
-  .focus-card {
-    height: 75px;
-    padding: 12px;
-    gap: 15px;
-  }
-  .minimap-wrap {
-    width: 180px;
-    height: 127px;
-  }
-  .minimap-wrap canvas {
-    width: 170px;
-    height: 110px;
-  }
-  .focus-identity strong {
-    font-size: 14px;
-  }
-  .focus-identity {
-    min-width: 121px;
-  }
-  .camera-panel {
-    top: 66px;
+    max-width: 120px;
   }
 }
-@media (max-width: 1100px) {
+
+/* ---- Tablet: the bar stacks its controls under the clock ------------ */
+@media (max-width: 1180px) {
   .header {
     padding: 0 26px;
-    height: 78px;
   }
-  main {
-    padding: 26px 26px 0;
+  .page {
+    padding: 22px 26px 0;
   }
-  .header-center {
-    display: none;
+  .timeline-area {
+    padding: 0 26px 8px;
   }
-  .race-stats {
-    gap: 20px;
-  }
+  .header-center,
   .poc-badge {
     display: none;
   }
+  .race-stats > div {
+    min-width: 0;
+    padding: 8px 12px;
+  }
   .replay-shell {
-    grid-template-columns: 204px minmax(0, 1fr);
+    grid-template-columns: 236px minmax(0, 1fr);
+    gap: 14px;
   }
   .driver-row {
-    gap: 7px;
-    padding: 0 8px;
+    gap: 6px;
+    padding: 0 8px 0 6px;
+  }
+  .driver-mii {
+    width: 36px;
+    height: 36px;
   }
   .driver-info small {
-    max-width: 76px;
+    max-width: 74px;
   }
-  .panel-title {
-    padding-left: 15px;
-    padding-right: 15px;
-  }
-  .standings-sub {
-    padding-left: 15px;
-    padding-right: 15px;
-  }
-  .minimap-wrap {
-    display: none;
-  }
-  .focus-card {
-    gap: 9px;
-  }
-  .telemetry-bars {
-    display: none;
-  }
-  .scene-instruction {
-    font-size: 7px;
-  }
-  .replay-caption > span {
-    max-width: 370px;
-  }
-  .race-heading p {
-    font-size: 11px;
-  }
-  .race-stats strong {
-    font-size: 12px;
-  }
-  .camera-panel {
-    width: 133px;
-  }
+  .minimap-wrap,
+  .telemetry-bars,
   .track-sign {
     display: none;
   }
-}
-@media (max-width: 760px) {
-  .header {
-    height: 70px;
-    padding: 0 18px;
+  .wii-bar {
+    --notch-depth: 50px;
+    --notch-width: 220px;
+    --notch-curve: 80px;
+    height: auto;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "play center mail"
+      "tools tools tools"
+      "lap lap lap";
+    row-gap: 14px;
+    padding: 0 26px 16px;
   }
-  .brand {
-    font-size: 23px;
+  .bar-center {
+    grid-area: center;
+    position: static;
+    transform: none;
+    align-self: start;
   }
-  .brand-mark {
-    width: 34px;
-    height: 34px;
-    border-radius: 11px;
-    font-size: 28px;
+  #play,
+  #messages-button {
+    margin-top: 24px;
   }
-  .brand-mark span {
-    font-size: 21px;
+  .bar-tools,
+  .lap-jump {
+    justify-self: center;
   }
-  .text-button span {
+  .keyboard-help {
     display: none;
   }
-  .header-actions {
-    gap: 13px;
+  footer {
+    padding: 4px 26px 14px;
   }
-  main {
-    padding: 23px 16px 0;
+}
+
+/* ---- Phone ---------------------------------------------------------- */
+@media (max-width: 760px) {
+  .header {
+    height: 64px;
+    padding: 0 16px;
+  }
+  .brand-name {
+    font-size: 23px;
+  }
+  .brand-badge {
+    width: 38px;
+    height: 38px;
+  }
+  .header-actions {
+    gap: 12px;
+  }
+  .header .pill-button {
+    width: 40px;
+    padding: 0;
+  }
+  .header .pill-button span {
+    display: none;
+  }
+  .page {
+    padding: 18px 16px 0;
+  }
+  .timeline-area {
+    padding: 0 16px 8px;
   }
   .race-heading {
-    align-items: flex-start;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
   .race-stats {
     display: none;
   }
   h1 {
-    font-size: 29px;
+    font-size: 28px;
   }
   .race-heading p {
-    font-size: 10px;
+    font-size: 13px;
   }
   .replay-shell {
-    height: 590px;
-    min-height: 590px;
+    height: auto;
+    min-height: 0;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 440px 150px;
+    grid-template-rows: 440px 184px;
+    gap: 14px;
   }
   .stage {
     grid-row: 1;
   }
   .standings {
     grid-row: 2;
-    min-height: 150px;
     display: grid;
-    grid-template-columns: 85px 1fr;
-    grid-template-rows: 1fr;
-    border-top: 1px solid #dce5d2;
-    border-right: 0;
-    overflow: hidden;
+    grid-template-columns: 82px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
   .panel-title {
-    padding: 12px;
-    display: flex;
+    padding: 12px 10px;
     flex-direction: column;
     align-items: flex-start;
     justify-content: center;
     gap: 10px;
   }
   .panel-title h2 {
-    font-size: 11px;
+    font-size: 16px;
   }
   .standings-sub,
   .standing-columns,
@@ -1464,58 +1755,64 @@ kbd {
     display: grid;
     grid-auto-flow: column;
     grid-template-rows: repeat(3, 1fr);
-    grid-auto-columns: 145px;
+    grid-auto-columns: 158px;
+    gap: 6px;
     overflow: auto;
-    padding: 9px 0;
-    gap: 2px;
-    border-left: 1px solid #e5ebdb;
+    padding: 8px 8px 8px 4px;
   }
   .driver-row {
-    height: 40px;
-    width: 145px;
-    margin: 0;
+    height: auto;
+    min-height: 0;
+    width: 158px;
+    gap: 5px;
+    padding: 0 8px 0 5px;
+    border-radius: 12px;
   }
-  .driver-row.following:before {
-    display: none;
+  .driver-row:hover {
+    transform: none;
+  }
+  .driver-mii {
+    width: 32px;
+    height: 32px;
   }
   .driver-info small {
-    max-width: 75px;
-    font-size: 6px;
-  }
-  .driver-gap {
-    font-size: 8px;
-  }
-  .driver-pos {
-    font-size: 8px;
-    width: 12px;
+    max-width: 60px;
+    font-size: 10px;
   }
   .driver-info strong {
-    font-size: 10px;
+    font-size: 13px;
+  }
+  .driver-gap {
+    font-size: 11px;
+  }
+  .driver-pos {
+    font-size: 12px;
+    width: 16px;
+  }
+  .team-line {
+    height: 20px;
+    width: 3px;
   }
   .camera-panel {
     right: 10px;
-    top: 57px;
-    width: 111px;
-    padding: 9px 5px;
+    top: 58px;
+    width: 128px;
+    padding: 8px 6px 6px;
+    border-radius: 16px;
   }
   .camera-option {
-    height: 30px;
+    height: 32px;
     gap: 6px;
-    padding: 0 6px;
-    font-size: 9px;
+    padding: 0 8px;
+    font-size: 13px;
+    border-radius: 10px;
   }
-  .camera-num {
-    display: none;
-  }
-  .camera-header {
-    padding-left: 5px;
-    padding-right: 5px;
-  }
+  .camera-num,
   .camera-header svg {
     display: none;
   }
   .camera-header > span:first-child {
-    font-size: 6px;
+    font-size: 12px;
   }
   .stage-top {
     left: 12px;
@@ -1523,162 +1820,150 @@ kbd {
     top: 12px;
   }
   .location-chip {
-    font-size: 6px;
-    padding: 7px;
+    font-size: 9px;
+    padding: 6px 10px 6px 8px;
     gap: 4px;
+    max-width: calc(100% - 52px);
   }
-  .location-chip svg {
-    width: 10px;
-  }
-  .floating-button {
-    width: 27px;
-    height: 27px;
+  .location-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .focus-card {
-    left: 11px;
-    bottom: 12px;
-    height: 58px;
-    max-width: calc(100% - 22px);
-    padding: 7px;
+    left: 10px;
+    bottom: 10px;
+    height: 70px;
+    max-width: calc(100% - 20px);
+    padding: 6px 12px 6px 6px;
     gap: 8px;
+    border-radius: 18px;
   }
   .avatar {
-    width: 36px;
-    height: 41px;
-  }
-  .mii-head {
-    left: 6px;
-  }
-  .mii-body {
-    left: 3px;
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
   }
   .focus-identity {
-    min-width: 94px;
+    min-width: 0;
   }
   .focus-identity strong {
-    font-size: 11px;
+    font-size: 14px;
   }
   .focus-divider {
-    margin: 0 1px;
+    display: none;
   }
   .speed strong {
-    font-size: 20px;
-    min-width: 34px;
+    min-width: 40px;
+  }
+  .speed .lcd {
+    height: 24px;
   }
   .gear {
-    margin-left: 1px;
-  }
-  .gear span {
-    font-size: 5px;
+    margin-left: 0;
   }
   .tire-chip {
     display: none;
   }
   .scene-instruction {
-    left: 13px;
-    bottom: 80px;
-    max-width: 250px;
-    font-size: 7px;
+    left: 12px;
+    bottom: 90px;
+    max-width: 260px;
+    font-size: 12px;
   }
   .status-note {
-    left: 11px;
-    bottom: 107px;
-    font-size: 8px;
+    left: 10px;
+    bottom: 124px;
+    font-size: 12px;
+  }
+  .hs h2 {
+    font-size: 18px;
+  }
+  .hs p {
+    font-size: 13px;
   }
   .transport {
-    padding: 14px 13px 10px;
-    margin-top: 10px;
-  }
-  .timeline-top {
-    margin-bottom: 13px;
-  }
-  .replay-caption {
-    font-size: 7px;
-    gap: 5px;
+    margin-top: 14px;
   }
   .replay-caption > span {
     display: none;
   }
-  .elapsed {
-    font-size: 9px;
-    gap: 5px;
-  }
   .timeline-labels {
-    font-size: 5px;
+    font-size: 9px;
     letter-spacing: 0.2px;
   }
-  .transport-bottom {
-    flex-wrap: wrap;
-    gap: 12px;
+  .wii-bar {
+    --notch-depth: 44px;
+    --notch-width: 128px;
+    --notch-curve: 56px;
+    column-gap: 10px;
+    padding: 0 14px 14px;
   }
-  .playback-buttons {
-    gap: 5px;
+  .round-button.big {
+    width: 64px;
+    height: 64px;
   }
-  .playback-buttons .icon-button {
-    width: 27px;
+  .round-button.big svg {
+    width: 24px;
+    height: 24px;
   }
-  .play-button {
-    width: 34px;
-    height: 34px;
+  #messages-button svg {
+    width: 24px;
+    height: 20px;
   }
-  .speed-select {
-    font-size: 8px;
-    margin-left: 1px;
-    padding: 7px 5px;
+  .clock .lcd {
+    height: 28px;
   }
-  .lap-jump {
-    gap: 3px;
+  .clock-suffix {
+    display: none;
+  }
+  .bar-date {
+    margin-top: 10px;
+    font-size: 22px;
+  }
+  .bar-tools {
+    gap: 6px;
+  }
+  .square-button {
+    width: 42px;
+    height: 42px;
   }
   .lap-jump label {
     display: none;
   }
-  .lap-jump input {
-    width: 28px;
-    font-size: 9px;
-  }
-  .lap-jump > span {
-    font-size: 7px;
-  }
-  .keyboard-help {
-    display: none;
-  }
   footer {
-    height: 56px;
-    font-size: 7px;
-    gap: 10px;
-  }
-  footer > span:last-child {
-    font-size: 7px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 16px 14px;
+    font-size: 11px;
   }
   .footer-engine {
     display: none;
   }
-  .loading h2 {
-    font-size: 20px;
-  }
-  .loading-logo {
-    width: 63px;
-    height: 63px;
-  }
-  .replay-shell:fullscreen {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: calc(100vh - 150px) 150px;
-  }
-  .replay-shell:fullscreen .stage {
-    height: calc(100vh - 150px);
-  }
-  .replay-shell:fullscreen .focus-card {
-    bottom: 12px;
+  .dialog-header,
+  #dialog-content,
+  .dialog-actions {
+    padding-left: 22px;
+    padding-right: 22px;
   }
 }
+
+/* ---- Fullscreen ----------------------------------------------------- */
 main:fullscreen {
-  background: #f4f6ef;
-  max-width: none;
   width: 100%;
   height: 100%;
-  padding: 0;
   display: flex;
   flex-direction: column;
+  background: repeating-linear-gradient(180deg, #f4f4f4 0 2px, #e8e8e8 2px 4px);
+}
+main:fullscreen .page {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px 0;
 }
 main:fullscreen .race-heading,
 main:fullscreen footer {
@@ -1688,29 +1973,23 @@ main:fullscreen .replay-shell {
   flex: 1;
   height: 0;
   min-height: 0;
-  border-radius: 0;
 }
 main:fullscreen .transport {
-  margin: 0;
-  border-radius: 0;
   flex-shrink: 0;
+  margin-top: 12px;
+}
+main:fullscreen .timeline-area {
+  max-width: none;
 }
 @media (max-width: 760px) {
   main:fullscreen .replay-shell {
-    grid-template-rows: minmax(0, 1fr) 120px;
-  }
-  main:fullscreen .standings {
-    min-height: 120px;
-  }
-  .flag-brazil {
-    width: 23px;
-    height: 16px;
+    grid-template-rows: minmax(0, 1fr) 132px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   *,
-  *:before,
-  *:after {
+  *::before,
+  *::after {
     scroll-behavior: auto !important;
     transition: none !important;
     animation: none !important;

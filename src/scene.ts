@@ -2,6 +2,20 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Metadata, CameraMode, Driver } from "./types";
+import {
+  earGeometry,
+  faceAtlas,
+  faceGeometry,
+  hairGeometry,
+  hairKey,
+  headGeometry,
+  instancedFaceMaterial,
+  miiFor,
+  miiGlow,
+  type FaceAtlas,
+  type HairStyle,
+  type Mii,
+} from "./mii";
 
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const mat = (color: THREE.ColorRepresentation) =>
@@ -33,141 +47,198 @@ function box(
 ) {
   return mesh(new THREE.BoxGeometry(w, h, d), m, parent, x, y, z);
 }
-function sphere(
-  parent: THREE.Object3D,
-  m: THREE.Material,
-  x: number,
-  y: number,
-  z: number,
-  r: number,
-  sx = 1,
-  sy = 1,
-  sz = 1,
-) {
-  const o = mesh(new THREE.SphereGeometry(r, 12, 10), m, parent, x, y, z);
-  o.scale.set(sx, sy, sz);
-  return o;
-}
-function mergeGroup(group: THREE.Group) {
-  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
-  group.updateMatrixWorld(true);
-  for (const child of [...group.children])
-    if (child instanceof THREE.Mesh) {
-      const geo = child.geometry.clone();
-      geo.applyMatrix4(child.matrix);
-      const m = child.material as THREE.Material;
-      byMat.set(m, [...(byMat.get(m) ?? []), geo]);
-      group.remove(child);
-      child.geometry.dispose();
+// Car parts are merged per role. Each role becomes one instanced layer, and
+// every driver gets that layer's colour from their team or their Mii.
+class Parts {
+  private geometries = new Map<string, THREE.BufferGeometry[]>();
+  add(role: string, g: THREE.BufferGeometry, x = 0, y = 0, z = 0) {
+    g.translate(x, y, z);
+    this.geometries.set(role, [...(this.geometries.get(role) ?? []), g]);
+  }
+  box(
+    role: string,
+    x: number,
+    y: number,
+    z: number,
+    w: number,
+    h: number,
+    d: number,
+  ) {
+    this.add(role, new THREE.BoxGeometry(w, h, d), x, y, z);
+  }
+  sphere(
+    role: string,
+    x: number,
+    y: number,
+    z: number,
+    r: number,
+    sx = 1,
+    sy = 1,
+    sz = 1,
+    segments = 12,
+  ) {
+    this.add(
+      role,
+      new THREE.SphereGeometry(r, segments, Math.round(segments * 0.8)).scale(
+        sx,
+        sy,
+        sz,
+      ),
+      x,
+      y,
+      z,
+    );
+  }
+  limb(role: string, from: THREE.Vector3, to: THREE.Vector3, r: number) {
+    const along = to.clone().sub(from);
+    const g = new THREE.CapsuleGeometry(r, along.length(), 3, 8);
+    g.applyQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(
+        v(0, 1, 0),
+        along.clone().normalize(),
+      ),
+    );
+    const mid = from.clone().add(to).multiplyScalar(0.5);
+    this.add(role, g, mid.x, mid.y, mid.z);
+  }
+  build() {
+    const out = new Map<string, THREE.BufferGeometry>();
+    for (const [role, list] of this.geometries) {
+      if (role !== "face") list.forEach((g) => g.deleteAttribute("uv"));
+      const merged = mergeGeometries(list, false);
+      list.forEach((g) => g.dispose());
+      if (merged) out.set(role, merged);
     }
-  for (const [m, geometries] of byMat) {
-    const g = mergeGeometries(geometries, false);
-    if (g) mesh(g, m, group);
-    geometries.forEach((g) => g.dispose());
+    return out;
   }
 }
 
-// Each avatar is built from actual 3D geometry; the drivers remain visible in onboard/portrait views.
-export function createCar(driver: Driver, index: number): THREE.Group {
-  const car = new THREE.Group();
-  const color = mat(`#${driver.team_colour || "ee7b25"}`);
-  const dark = mat("#263b37");
-  const tire = mat("#222a29");
-  const silver = mat("#9faeaa");
-  const cream = mat("#f9f8e9");
-  box(car, color, 0, 1.1, 0, 3, 1.3, 5.8);
-  box(car, color, 0, 0.8, 3.4, 1.25, 0.65, 3.6);
-  box(car, dark, 0, 0.55, 5.25, 5.9, 0.28, 1.1);
-  box(car, color, 0, 0.85, 5.35, 5.8, 0.18, 0.6);
-  box(car, dark, 0, 2, -3.5, 5.5, 0.28, 1.15);
-  box(car, color, 0, 2.3, -3.45, 5.3, 0.25, 1.15);
+const HEAD = v(0, 4.55, -0.55);
+const HEAD_RADIUS = 1.4;
+
+// The drivers are full Miis built from real geometry, so they stay visible in
+// the onboard and driver close-up views.
+function carParts(miis: Mii[]) {
+  const p = new Parts();
+  p.box("team", 0, 1.1, 0, 3, 1.3, 5.8);
+  p.box("team", 0, 0.8, 3.4, 1.25, 0.65, 3.6);
+  p.box("dark", 0, 0.55, 5.25, 5.9, 0.28, 1.1);
+  p.box("team", 0, 0.85, 5.35, 5.8, 0.18, 0.6);
+  p.box("dark", 0, 2, -3.5, 5.5, 0.28, 1.15);
+  p.box("team", 0, 2.3, -3.45, 5.3, 0.25, 1.15);
   for (const x of [-2.3, 2.3])
     for (const z of [-2.15, 3.1]) {
-      const wheel = mesh(
-        new THREE.CylinderGeometry(1.05, 1.05, 1.05, 12),
-        tire,
-        car,
+      p.add(
+        "tire",
+        new THREE.CylinderGeometry(1.05, 1.05, 1.05, 16).rotateZ(Math.PI / 2),
         x,
         1.05,
         z,
       );
-      wheel.rotation.z = Math.PI / 2;
-      const rim = mesh(
-        new THREE.CylinderGeometry(0.58, 0.58, 1.08, 12),
-        silver,
-        car,
+      p.add(
+        "silver",
+        new THREE.CylinderGeometry(0.58, 0.58, 1.08, 16).rotateZ(Math.PI / 2),
         x,
         1.05,
         z,
       );
-      rim.rotation.z = Math.PI / 2;
-      box(car, dark, x / 2, 0.9, z, 1.5, 0.18, 0.35);
+      p.box("dark", x / 2, 0.9, z, 1.5, 0.18, 0.35);
     }
-  box(car, color, -1.8, 1, 0, 0.85, 0.9, 3.2);
-  box(car, color, 1.8, 1, 0, 0.85, 0.9, 3.2);
-  box(car, dark, 0, 1.95, -0.45, 2, 0.25, 2.9);
-  const skin = mat(
-    ["#edba8e", "#f1cba7", "#e7b48c", "#cb956e", "#dfac83"][index % 5],
-  );
-  const hair = mat(
-    ["#49392a", "#755033", "#332b28", "#c89655", "#5a3a29"][index % 5],
-  );
-  sphere(car, color, 0, 2.6, -0.6, 1.05, 1, 0.95, 0.65);
-  sphere(car, skin, 0, 4, -0.6, 1.52, 0.95, 1.08, 0.85);
-  sphere(car, skin, -1.4, 4, -0.6, 0.27);
-  sphere(car, skin, 1.4, 4, -0.6, 0.27);
-  sphere(car, hair, 0, 4.93, -0.95, 1.36, 1.02, 0.58, 0.83);
-  for (let k = 0; k < 4; k++)
-    sphere(car, hair, -0.85 + k * 0.55, 4.9, 0.17, 0.4, 1, 0.75, 0.9);
-  for (const x of [-0.48, 0.48]) {
-    sphere(car, cream, x, 4.03, 0.59, 0.27, 0.85, 1, 0.45);
-    sphere(car, dark, x, 4, 0.71, 0.14, 0.8, 1.1, 0.35);
-    const eyebrow = box(car, hair, x, 4.43, 0.63, 0.57, 0.11, 0.1);
-    eyebrow.rotation.z = x < 0 ? 0.06 : -0.06;
+  p.box("team", -1.8, 1, 0, 0.85, 0.9, 3.2);
+  p.box("team", 1.8, 1, 0, 0.85, 0.9, 3.2);
+  p.box("dark", 0, 1.95, -0.45, 2, 0.25, 2.9);
+  // Favourite-colour suit, arms out to the wheel and round Mii hands.
+  p.sphere("suit", 0, 2.35, -0.65, 0.95, 1.12, 0.92, 0.8, 20);
+  for (const side of [-1, 1]) {
+    p.limb(
+      "suit",
+      v(side * 0.82, 2.85, -0.55),
+      v(side * 0.6, 2.62, 0.62),
+      0.17,
+    );
+    p.sphere("suit", side * 0.6, 2.62, 0.66, 0.25);
   }
-  sphere(car, skin, 0, 3.7, 0.73, 0.24, 0.7, 1, 0.7);
-  const smile = mesh(
-    new THREE.TorusGeometry(0.28, 0.045, 5, 12, Math.PI),
-    dark,
-    car,
+  p.add(
+    "dark",
+    new THREE.TorusGeometry(0.55, 0.11, 8, 20).rotateX(-0.65),
     0,
-    3.49,
-    0.6,
+    2.62,
+    0.82,
   );
-  smile.rotation.z = Math.PI;
-  for (const x of [-0.95, 0.95]) sphere(car, skin, x, 2.8, 0.45, 0.32);
-  mesh(
-    new THREE.TorusGeometry(0.55, 0.12, 6, 12),
-    dark,
-    car,
-    0,
-    2.7,
-    0.9,
-  ).rotation.x = -0.65;
-  mergeGroup(car);
-  return car;
+  p.add("skin", new THREE.CylinderGeometry(0.3, 0.34, 0.6, 12), 0, 3.15, -0.62);
+  p.add("skin", headGeometry(HEAD_RADIUS), HEAD.x, HEAD.y, HEAD.z);
+  p.add("skin", earGeometry(HEAD_RADIUS), HEAD.x, HEAD.y, HEAD.z);
+  p.add("face", faceGeometry(HEAD_RADIUS), HEAD.x, HEAD.y, HEAD.z);
+  for (const key of new Set(miis.map(hairKey))) {
+    const [style, part] = key.split(":");
+    p.add(
+      `hair:${key}`,
+      hairGeometry(style as HairStyle, Number(part), HEAD_RADIUS),
+      HEAD.x,
+      HEAD.y,
+      HEAD.z,
+    );
+  }
+  return p.build();
 }
 
-function createDistantCar(driver: Driver, index: number): THREE.Group {
-  const car = new THREE.Group(),
-    color = mat(`#${driver.team_colour}`),
-    dark = mat("#263b37"),
-    skin = mat(
-      ["#edba8e", "#f1cba7", "#e7b48c", "#cb956e", "#dfac83"][index % 5],
-    ),
-    hair = mat(
-      ["#49392a", "#755033", "#332b28", "#c89655", "#5a3a29"][index % 5],
-    );
-  box(car, color, 0, 1.1, 0, 3, 1.3, 5.8);
-  box(car, color, 0, 0.8, 3.4, 1.25, 0.65, 3.6);
-  box(car, color, 0, 0.8, 5.2, 5.8, 0.3, 1);
-  box(car, color, 0, 2.2, -3.5, 5.5, 0.4, 1);
+function distantCarParts() {
+  const p = new Parts();
+  p.box("team", 0, 1.1, 0, 3, 1.3, 5.8);
+  p.box("team", 0, 0.8, 3.4, 1.25, 0.65, 3.6);
+  p.box("team", 0, 0.8, 5.2, 5.8, 0.3, 1);
+  p.box("team", 0, 2.2, -3.5, 5.5, 0.4, 1);
   for (const x of [-2.3, 2.3])
-    for (const z of [-2.15, 3.1]) box(car, dark, x, 1, z, 1, 2, 2);
-  mesh(new THREE.SphereGeometry(1.5, 6, 4), skin, car, 0, 4, -0.6);
-  box(car, hair, 0, 5.1, -0.6, 2.3, 0.6, 2);
-  mergeGroup(car);
-  return car;
+    for (const z of [-2.15, 3.1]) p.box("dark", x, 1, z, 1, 2, 2);
+  p.box("suit", 0, 2.45, -0.6, 1.9, 1, 1.4);
+  p.add(
+    "skin",
+    new THREE.SphereGeometry(HEAD_RADIUS, 8, 6),
+    HEAD.x,
+    HEAD.y,
+    HEAD.z,
+  );
+  p.add(
+    "hair",
+    hairGeometry("short", 1, HEAD_RADIUS, 16, 5),
+    HEAD.x,
+    HEAD.y,
+    HEAD.z,
+  );
+  return p.build();
+}
+
+const FIXED_COLORS: Record<string, string> = {
+  dark: "#2c3134",
+  tire: "#24282a",
+  silver: "#c7cfd4",
+  face: "#ffffff",
+};
+const ROUGHNESS: Record<string, number> = {
+  team: 0.45,
+  dark: 0.75,
+  tire: 0.9,
+  silver: 0.35,
+  suit: 0.7,
+  skin: 0.62,
+};
+function partColor(role: string, driver: Driver, mii: Mii) {
+  if (role === "team") return `#${driver.team_colour || "ff6e19"}`;
+  if (role === "suit") return mii.favorite;
+  if (role === "skin") return mii.skin;
+  if (role === "hair") return mii.hair;
+  if (role.startsWith("hair:"))
+    return role === `hair:${hairKey(mii)}` ? mii.hair : null;
+  return FIXED_COLORS[role] ?? "#ffffff";
+}
+
+interface CarLayer {
+  mesh: THREE.InstancedMesh;
+  /** Per driver; null when the driver does not use this part (another hair style). */
+  colors: (THREE.Color | null)[];
+  cells?: [number, number][];
+  cellAttribute?: THREE.InstancedBufferAttribute;
+  count: number;
 }
 
 export class ReplayScene {
@@ -175,7 +246,9 @@ export class ReplayScene {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(42, 1, 1, 20000);
   readonly controls: OrbitControls;
-  readonly cars: THREE.Group[] = [];
+  readonly cars: THREE.Object3D[] = [];
+  readonly miis: Mii[];
+  readonly atlas: FaceAtlas;
   readonly track: THREE.Vector3[];
   readonly center: THREE.Vector3;
   readonly extent: number;
@@ -195,10 +268,8 @@ export class ReplayScene {
   private cameraTarget = new THREE.Vector3();
   private desiredPosition = new THREE.Vector3();
   private lastHeading = new Array(20).fill(0);
-  private carLayers: THREE.InstancedMesh[] = [];
-  private distantLayers: THREE.InstancedMesh[] = [];
-  private layerColors: THREE.Color[][] = [];
-  private distantColors: THREE.Color[][] = [];
+  private carLayers: CarLayer[];
+  private distantLayers: CarLayer[];
   private carMatrix = new THREE.Matrix4();
   private blobMatrix = new THREE.Matrix4();
   private blobBase = new THREE.Matrix4()
@@ -221,12 +292,13 @@ export class ReplayScene {
       powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    this.renderer.setClearColor("#cfe3e2");
+    this.renderer.setClearColor("#cdeefb");
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    // Neutral keeps the Mii palette and team colours true to their values.
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1;
     container.append(this.renderer.domElement);
     this.renderer.domElement.setAttribute(
       "aria-label",
@@ -249,15 +321,21 @@ export class ReplayScene {
       bounds.max.z - bounds.min.z,
     );
     this.scene.fog = new THREE.Fog(
-      "#cfe3e2",
+      "#cdeefb",
       this.extent * 1.5,
       this.extent * 4,
     );
-    this.scene.add(new THREE.HemisphereLight("#fff9dc", "#4b7252", 2.7));
-    this.shadowLight = new THREE.DirectionalLight("#fff3d9", 3.2);
+    this.scene.add(new THREE.HemisphereLight("#ffffff", "#d9d2bc", 1.9));
+    this.shadowLight = new THREE.DirectionalLight("#fff6e6", 2.4);
     this.shadowLight.position.copy(this.center).add(v(400, 750, 200));
     this.shadowLight.target.position.copy(this.center);
     this.scene.add(this.shadowLight, this.shadowLight.target);
+    // A soft light from the camera, like a character-select screen, so Mii
+    // faces stay bright whichever way the car is facing.
+    const fill = new THREE.DirectionalLight("#ffffff", 0.75);
+    fill.target.position.set(0, 0, -1);
+    this.camera.add(fill, fill.target);
+    this.scene.add(this.camera);
     this.shadowLight.castShadow = true;
     this.shadowLight.shadow.mapSize.set(2048, 2048);
     this.shadowLight.shadow.camera.left = -this.extent;
@@ -270,59 +348,16 @@ export class ReplayScene {
     this.shadowLight.shadow.needsUpdate = true;
     this.buildWorld();
     this.mergeStaticWorld();
-    for (let i = 0; i < meta.drivers.length; i++) {
-      const car = createCar(meta.drivers[i], i);
-      this.cars.push(car);
-      this.scene.add(car);
-    }
-    // All twenty cars share seven instanced geometry layers. Colors still differ per driver.
-    const makeLayers = (
-      models: THREE.Group[],
-      layers: THREE.InstancedMesh[],
-      colors: THREE.Color[][],
-    ) => {
-      (models[0].children as THREE.Mesh[]).forEach((template, j) => {
-        const material = (
-          template.material as THREE.MeshStandardMaterial
-        ).clone();
-        material.color.set("#ffffff");
-        const layer = new THREE.InstancedMesh(
-          template.geometry.clone(),
-          material,
-          meta.drivers.length,
-        );
-        layer.castShadow = false;
-        layer.receiveShadow = true;
-        layer.frustumCulled = false;
-        const palette = models.map((car) =>
-          (
-            (car.children[j] as THREE.Mesh)
-              .material as THREE.MeshStandardMaterial
-          ).color.clone(),
-        );
-        palette.forEach((color, i) => layer.setColorAt(i, color));
-        colors.push(palette);
-        layers.push(layer);
-        this.scene.add(layer);
-      });
-      models.forEach((car) => {
-        for (const child of [...car.children] as THREE.Mesh[]) {
-          child.geometry.dispose();
-          (child.material as THREE.Material).dispose();
-          car.remove(child);
-        }
-      });
-    };
-    makeLayers(this.cars, this.carLayers, this.layerColors);
-    makeLayers(
-      meta.drivers.map(createDistantCar),
-      this.distantLayers,
-      this.distantColors,
-    );
+    this.buildSky();
+    this.miis = meta.drivers.map(miiFor);
+    this.atlas = faceAtlas(this.miis);
+    this.cars = meta.drivers.map(() => new THREE.Object3D());
+    this.carLayers = this.makeLayers(carParts(this.miis));
+    this.distantLayers = this.makeLayers(distantCarParts());
     this.blobShadows = new THREE.InstancedMesh(
       new THREE.CircleGeometry(3.1, 12),
       new THREE.MeshBasicMaterial({
-        color: "#233c32",
+        color: "#1f3a26",
         transparent: true,
         opacity: 0.18,
         depthWrite: false,
@@ -334,9 +369,9 @@ export class ReplayScene {
     this.focusRing = mesh(
       new THREE.RingGeometry(6.8, 7.4, 36),
       new THREE.MeshBasicMaterial({
-        color: "#f9fbe5",
+        color: "#34beed",
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.9,
         side: THREE.DoubleSide,
         depthWrite: false,
       }),
@@ -347,12 +382,19 @@ export class ReplayScene {
     canvas.width = 128;
     canvas.height = 64;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#fcfff5";
+    // A Wii button: white pill, cyan outline, grey label.
+    const pill = ctx.createLinearGradient(0, 6, 0, 50);
+    pill.addColorStop(0, "#ffffff");
+    pill.addColorStop(1, "#e4e4e4");
+    ctx.fillStyle = pill;
+    ctx.strokeStyle = "#34beed";
+    ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.roundRect(5, 5, 118, 45, 18);
+    ctx.roundRect(6, 6, 116, 44, 22);
     ctx.fill();
-    ctx.fillStyle = "#274b3a";
-    ctx.font = "bold 28px sans-serif";
+    ctx.stroke();
+    ctx.fillStyle = "#4a4a4a";
+    ctx.font = '500 25px "Zen Kaku Gothic New", sans-serif';
     ctx.textAlign = "center";
     ctx.fillText("FOLLOW", 64, 37);
     this.halo = new THREE.Sprite(
@@ -367,6 +409,44 @@ export class ReplayScene {
     this.observer.observe(container);
     this.resize();
     this.overview();
+  }
+  // Every part is one instanced draw shared by all twenty cars.
+  private makeLayers(parts: Map<string, THREE.BufferGeometry>): CarLayer[] {
+    const n = this.meta.drivers.length;
+    return [...parts].map(([role, geometry]) => {
+      const hair = role.startsWith("hair");
+      const material =
+        role === "face"
+          ? instancedFaceMaterial(this.atlas)
+          : new THREE.MeshStandardMaterial({
+              color: "#ffffff",
+              roughness: ROUGHNESS[role] ?? (hair ? 0.5 : 0.85),
+              metalness: role === "silver" ? 0.35 : 0,
+              side: hair ? THREE.DoubleSide : THREE.FrontSide,
+            });
+      if (role === "skin" || role === "suit" || hair) miiGlow(material);
+      const mesh = new THREE.InstancedMesh(geometry, material, n);
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = false;
+      const colors = this.meta.drivers.map((d, i) => {
+        const c = partColor(role, d, this.miis[i]);
+        return c ? new THREE.Color(c) : null;
+      });
+      colors.forEach((c, i) => mesh.setColorAt(i, c ?? new THREE.Color()));
+      const layer: CarLayer = { mesh, colors, count: 0 };
+      if (role === "face") {
+        layer.cellAttribute = new THREE.InstancedBufferAttribute(
+          new Float32Array(n * 2),
+          2,
+        );
+        layer.cellAttribute.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute("faceCell", layer.cellAttribute);
+        layer.cells = this.miis.map((_, i) => this.atlas.offset(i));
+      }
+      this.scene.add(mesh);
+      return layer;
+    });
   }
   private mergeStaticWorld() {
     this.scene.updateMatrixWorld(true);
@@ -409,7 +489,7 @@ export class ReplayScene {
     const radius = this.extent * 0.86;
     const island = mesh(
       new THREE.CylinderGeometry(radius, radius * 0.93, 55, 64),
-      mat("#829c68"),
+      mat("#5b8f3d"),
       this.scene,
       this.center.x,
       -29,
@@ -418,7 +498,7 @@ export class ReplayScene {
     island.receiveShadow = true;
     mesh(
       new THREE.CylinderGeometry(radius * 0.935, radius * 0.875, 12, 64),
-      mat("#d0ccb1"),
+      mat("#ecdcaa"),
       this.scene,
       this.center.x,
       -62,
@@ -426,7 +506,7 @@ export class ReplayScene {
     );
     const land = mesh(
       new THREE.CircleGeometry(radius, 64),
-      mat("#9ebf7a"),
+      mat("#6ea846"),
       this.scene,
       this.center.x,
       -0.1,
@@ -466,9 +546,9 @@ export class ReplayScene {
       material.side = THREE.DoubleSide;
       mesh(g, material, this.scene);
     };
-    ribbon(29, 0.05, "#b6ca99");
-    ribbon(20, 0.12, "#f4eed8");
-    ribbon(17, 0.18, "#677472");
+    ribbon(29, 0.05, "#84bb5c");
+    ribbon(20, 0.12, "#ffffff");
+    ribbon(17, 0.18, "#7c8386");
     const curbGeos: THREE.BufferGeometry[][] = [[], []];
     for (let i = 0; i < points.length - 1; i += 5) {
       const a = points[i],
@@ -493,7 +573,7 @@ export class ReplayScene {
     }
     curbGeos.forEach((g, i) => {
       const merged = mergeGeometries(g, false);
-      if (merged) mesh(merged, mat(i ? "#f8f7e5" : "#e89983"), this.scene);
+      if (merged) mesh(merged, mat(i ? "#ffffff" : "#e5463c"), this.scene);
       g.forEach((x) => x.dispose());
     });
     // Simple pit lane beside the real start/finish segment.
@@ -507,15 +587,15 @@ export class ReplayScene {
     pit.position.copy(start).addScaledVector(normal, 35);
     pit.rotation.y = Math.atan2(tangent.x, tangent.z);
     this.scene.add(pit);
-    box(pit, mat("#6e7975"), 0, 0.15, 18, 15, 0.3, 210);
-    box(pit, mat("#e9e8db"), 15, 8, 10, 17, 16, 190);
-    box(pit, mat("#38534a"), 15, 18, 10, 22, 3, 195);
-    const glass = mat("#9ac8c1");
+    box(pit, mat("#7c8386"), 0, 0.15, 18, 15, 0.3, 210);
+    box(pit, mat("#f5f5f5"), 15, 8, 10, 17, 16, 190);
+    box(pit, mat("#34beed"), 15, 18, 10, 22, 3, 195);
+    const glass = mat("#8fd6f2");
     for (let i = 0; i < 16; i++) {
       box(pit, glass, 5.9, 6, -77 + i * 11, 0.3, 7, 8);
       box(
         pit,
-        mat(i % 2 ? "#e7eddb" : "#dde4d1"),
+        mat(i % 2 ? "#ffffff" : "#e6e6e6"),
         6.5,
         15,
         -77 + i * 11,
@@ -528,18 +608,18 @@ export class ReplayScene {
     gantry.position.copy(start);
     gantry.rotation.y = Math.atan2(tangent.x, tangent.z);
     this.scene.add(gantry);
-    const white = mat("#f4f4de");
+    const white = mat("#ffffff");
     box(gantry, white, -13, 10, 0, 1.5, 20, 2);
     box(gantry, white, 13, 10, 0, 1.5, 20, 2);
-    box(gantry, mat("#244936"), 0, 20, 0, 28, 5, 2);
-    const sign = this.textSprite("FORMULA MII", "#244936", "#eef3d8", 24, 5);
+    box(gantry, mat("#34beed"), 0, 20, 0, 28, 5, 2);
+    const sign = this.textSprite("Formula Mii", "#ffffff", "#12a3dd", 24, 5);
     sign.position.set(0, 20, 1.1);
     gantry.add(sign);
     for (let x = -8; x < 8; x += 2)
       for (let z = 0; z < 3; z++) {
         box(
           gantry,
-          mat((Math.floor(x / 2) + z) % 2 ? "#ecedda" : "#324b41"),
+          mat((Math.floor(x / 2) + z) % 2 ? "#ffffff" : "#3a3a3a"),
           x,
           0.35,
           z * 2,
@@ -569,17 +649,17 @@ export class ReplayScene {
     }
     const trunks = new THREE.InstancedMesh(
       new THREE.CylinderGeometry(1.3, 1.9, 10, 6),
-      mat("#a18d6f"),
+      mat("#9a6a3c"),
       treePoints.length,
     );
     const crowns = new THREE.InstancedMesh(
       new THREE.IcosahedronGeometry(9, 1),
-      mat("#528664"),
+      mat("#3c9a38"),
       treePoints.length,
     );
     const tops = new THREE.InstancedMesh(
       new THREE.IcosahedronGeometry(6.5, 1),
-      mat("#79a768"),
+      mat("#68bd42"),
       treePoints.length,
     );
     treePoints.forEach((p, i) => {
@@ -622,13 +702,13 @@ export class ReplayScene {
     const seatingPoint = this.track[Math.floor(this.track.length * 0.84)];
     seating.position.copy(seatingPoint).add(v(45, 0, 0));
     this.scene.add(seating);
-    const seats = [mat("#e7e9d8"), mat("#78a7a2"), mat("#deb995")];
+    const seats = [mat("#ffffff"), mat("#34beed"), mat("#ffd820")];
     for (let row = 0; row < 6; row++)
       box(seating, seats[row % 3], row * 4, 2 + row * 3, 0, 5, 3, 110);
-    box(seating, mat("#f1eedb"), 9, 24, 0, 38, 2, 118);
+    box(seating, mat("#ffffff"), 9, 24, 0, 38, 2, 118);
     const lake = mesh(
       new THREE.CircleGeometry(1, 48),
-      mat("#8cbfc0"),
+      mat("#5cc3ea"),
       this.scene,
       this.center.x + radius * 0.53,
       0.02,
@@ -638,7 +718,7 @@ export class ReplayScene {
     lake.scale.set(110, 65, 1);
     const city = new THREE.Group();
     this.scene.add(city);
-    const cityMats = [mat("#e0e5dc"), mat("#c8d7d0"), mat("#b2c9c4")];
+    const cityMats = [mat("#f7f7f7"), mat("#e2e9ee"), mat("#cbd8e2")];
     for (let i = 0; i < 35; i++) {
       const a = Math.PI * 1.1 + i * 0.038;
       const h = 25 + random() * 80;
@@ -654,7 +734,7 @@ export class ReplayScene {
       );
     }
     const cloudGeo = new THREE.SphereGeometry(1, 10, 8);
-    const cloudMat = new THREE.MeshBasicMaterial({ color: "#f5faf2" });
+    const cloudMat = new THREE.MeshBasicMaterial({ color: "#ffffff" });
     const cloudMesh = new THREE.InstancedMesh(cloudGeo, cloudMat, 40);
     for (let i = 0; i < 40; i++) {
       const angle = Math.floor(i / 4) * 0.628;
@@ -695,10 +775,38 @@ export class ReplayScene {
       this.stations.push({ position: pos, name: names[i], point });
       const tower = new THREE.Group();
       tower.position.copy(pos).setY(0);
-      box(tower, mat("#dce6d0"), 0, 10, 0, 2, 20, 2);
-      box(tower, mat("#3c6651"), 0, 21, 0, 5, 3, 3);
+      box(tower, mat("#ffffff"), 0, 10, 0, 2, 20, 2);
+      box(tower, mat("#34beed"), 0, 21, 0, 5, 3, 3);
       this.scene.add(tower);
     });
+  }
+  // A Wii Sports sky: deep blue overhead, fading to pale blue at the horizon.
+  private buildSky() {
+    const radius = Math.max(this.extent * 7, 8000);
+    const g = new THREE.SphereGeometry(radius, 32, 16);
+    const top = new THREE.Color("#4fb3ea"),
+      horizon = new THREE.Color("#cdeefb"),
+      colors: number[] = [],
+      c = new THREE.Color();
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const t = THREE.MathUtils.clamp(p.getY(i) / radius, 0, 1) ** 0.6;
+      c.copy(horizon).lerp(top, t);
+      colors.push(c.r, c.g, c.b);
+    }
+    g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    const sky = new THREE.Mesh(
+      g,
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        side: THREE.BackSide,
+        fog: false,
+        depthWrite: false,
+      }),
+    );
+    sky.position.copy(this.center);
+    sky.renderOrder = -1;
+    this.scene.add(sky);
   }
   private textSprite(
     text: string,
@@ -715,7 +823,7 @@ export class ReplayScene {
     ctx.fillRect(0, 0, 512, 128);
     ctx.fillStyle = fg;
     ctx.textAlign = "center";
-    ctx.font = "bold 48px sans-serif";
+    ctx.font = '500 56px "Zen Kaku Gothic New", sans-serif';
     ctx.fillText(text, 256, 83);
     const s = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c) }),
@@ -790,10 +898,10 @@ export class ReplayScene {
     return this.stations.map((s) => s.name);
   }
   update(frame: Float32Array, dt: number, force = true) {
-    let detailedCount = 0,
-      distantCount = 0,
-      visibleCount = 0,
+    let visibleCount = 0,
       detailMask = 0;
+    for (const layer of this.carLayers) layer.count = 0;
+    for (const layer of this.distantLayers) layer.count = 0;
     for (let i = 0; i < this.cars.length; i++) {
       const k = i * 16,
         car = this.cars[i];
@@ -806,13 +914,15 @@ export class ReplayScene {
       const detailed =
         car.position.distanceToSquared(this.camera.position) < 130 * 130;
       if (detailed) detailMask |= 1 << i;
-      const layers = detailed ? this.carLayers : this.distantLayers,
-        colors = detailed ? this.layerColors : this.distantColors;
-      const n = detailed ? detailedCount++ : distantCount++;
-      layers.forEach((layer, j) => {
-        layer.setMatrixAt(n, car.matrix);
-        layer.setColorAt(n, colors[j][i]);
-      });
+      for (const layer of detailed ? this.carLayers : this.distantLayers) {
+        const color = layer.colors[i];
+        if (!color) continue;
+        const n = layer.count++;
+        layer.mesh.setMatrixAt(n, car.matrix);
+        layer.mesh.setColorAt(n, color);
+        if (layer.cellAttribute)
+          layer.cellAttribute.setXY(n, ...layer.cells![i]);
+      }
       this.blobMatrix.makeRotationY(car.rotation.y).multiply(this.blobBase);
       this.blobMatrix.setPosition(car.position.x, 0.25, car.position.z);
       this.blobShadows.setMatrixAt(visibleCount++, this.blobMatrix);
@@ -821,16 +931,14 @@ export class ReplayScene {
       this.dirty = true;
       this.detailMask = detailMask;
     }
-    for (const [layers, count] of [
-      [this.carLayers, detailedCount],
-      [this.distantLayers, distantCount],
-    ] as const)
-      layers.forEach((layer) => {
-        layer.count = count;
-        layer.visible = count > 0;
-        layer.instanceMatrix.needsUpdate = true;
-        if (layer.instanceColor) layer.instanceColor.needsUpdate = true;
-      });
+    for (const layer of [...this.carLayers, ...this.distantLayers]) {
+      const { mesh } = layer;
+      mesh.count = layer.count;
+      mesh.visible = layer.count > 0;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      if (layer.cellAttribute) layer.cellAttribute.needsUpdate = true;
+    }
     this.blobShadows.count = visibleCount;
     this.blobShadows.instanceMatrix.needsUpdate = true;
     const car = this.cars[this.focus],
@@ -858,12 +966,14 @@ export class ReplayScene {
         this.cameraTarget.addScaledVector(dir, 75).setY(3.8);
         fov = 76;
       } else if (this.mode === "portrait") {
+        // A three-quarter view of the Mii, like a character select screen.
         this.desiredPosition
           .copy(pos)
-          .addScaledVector(dir, 14)
-          .add(v(5, 6.5, 0));
-        this.cameraTarget.setY(3.5);
-        fov = 42;
+          .addScaledVector(dir, 13)
+          .addScaledVector(v(dir.z, 0, -dir.x), 4.5)
+          .add(v(0, 6, 0));
+        this.cameraTarget.copy(pos).add(v(0, 4.2, 0));
+        fov = 40;
       } else {
         let station = this.station;
         if (station < 0) {

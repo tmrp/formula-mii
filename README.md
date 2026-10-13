@@ -1,7 +1,8 @@
 # Formula Mii
 
 A complete, playable 3D reconstruction of the **2025 São Paulo Grand Prix** in a
-playful Wii Sports inspired world, with Mii-style drivers. The POC uses the
+playful Wii Sports inspired world, presented in the style of the Wii Menu, with
+every driver as a Mii. The POC uses the
 latest completed Brazilian Grand Prix available through
 [OpenF1](https://github.com/br-g/openf1) as of 13 October 2026: session
 **9869**, 9 November 2025.
@@ -60,8 +61,9 @@ order; select another driver to continue following the race.
   allocations. Random and backwards seeks work independently of previous frames.
   There is no Rust build service or backend requirement at runtime.
 - **Three.js / WebGL:** the renderer consumes one fixed 16-float record per
-  driver. Seven instanced geometry layers draw nearby cars; distant cars use
-  simplified models. Static shadows render once and moving cars use lightweight
+  driver. Nearby cars are drawn by one instanced layer per part (chassis, suit,
+  skin, face and one per hairstyle), with each driver's colours and face per
+  instance; distant cars use simplified models. Static shadows render once and moving cars use lightweight
   contact shadows; trees and clouds are also instanced and static scenery is
   merged by material. The canvas stops drawing when playback and the camera are
   still. Pixel ratio is capped and automatically reduces when frames are slow,
@@ -77,8 +79,26 @@ order; select another driver to continue following the race.
   [the data pipeline](docs/data-pipeline.md) to reproduce acquisition or
   re-export the data.
 
-`src/scene.ts` owns rendering and cameras, `src/main.ts` owns the player UI, and
-`engine/src/lib.rs` owns interpolation and driver availability. Python
+`src/scene.ts` owns rendering and cameras, `src/main.ts` owns the player UI,
+`src/mii.ts` builds the Miis, `src/wii.ts` draws the Wii Menu chrome, and
+`engine/src/lib.rs` owns interpolation and driver availability.
+
+## The Miis and the Wii look
+
+Each driver is a Mii made to resemble them, built from the Wii's own palettes:
+six skin tones, eight hair colours, six eye colours and twelve favourite
+colours. Their racing suit is the favourite colour closest to the team colour,
+as Mii suits are in Mario Kart Wii. Heads use the Mii faceline, the hairstyles
+are parametric 3D shells, and eyes, brows, the nose line, mouths and facial hair
+are 2D face parts drawn into a texture atlas. The icons in the race order are
+renders of the 3D Miis, the same way the Wii makes Mii icons. Per-driver looks
+live in the `LOOKS` table in `src/mii.ts`.
+
+The interface follows the Wii Menu and Wii Shop Channel: the pinstriped
+background, channel-tile frames, glossy buttons with the blue pointer glow, the
+curved bottom bar with its segmented clock (race time) and date (race day), the
+Message Board (race control messages), the hand pointer and synthesised menu
+sounds, which can be turned off in Settings. Python
 acquisition scripts use only the standard library.
 
 ## Verify
@@ -117,5 +137,7 @@ retirement cutoffs are derived from OpenF1 timing, with documented timing
 precision in the data pipeline.
 
 Independent fan project; not affiliated with Formula 1 or Nintendo. The original
-3D models are generated in code. Bundled DM Sans and Manrope fonts are licensed
-under the SIL Open Font License; notices are in `public/fonts/`.
+3D models, Miis and interface art are generated in code; no Nintendo assets are
+included. The bundled Zen Kaku Gothic New font stands in for the Wii's system
+typeface and is licensed under the SIL Open Font License; the notice is in
+`public/fonts/`.
