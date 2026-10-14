@@ -48,7 +48,7 @@ npm run preview
 | Drag / scroll in aerial view | Orbit / zoom; right-drag to pan                    |
 | Speed selector               | 0.25× through 64× playback                         |
 | F / fullscreen button        | Fullscreen with playback controls                  |
-| Settings                     | Lower resolution and disable shadows               |
+| Settings                     | Sound, engines, depth of field, Performance mode   |
 
 The standings, gaps, tyre compound, throttle/brake indicators, selected driver's
 speed and mini map follow the replay time. Retirements remain visible in the
@@ -110,9 +110,20 @@ background. Its strength can be set or the effect turned off in Settings, and it
 is skipped in Performance mode.
 
 Settings, behind the gear in the header, is laid out like Wii Settings: a Sound
-page for the music, its volume and the menu sounds, and a Picture page for depth
-of field, blur strength and Performance mode, with a live preview of the race.
-Changes apply at once and are remembered on this device.
+page for the music, the engines, their volumes and the menu sounds, and a
+Picture page for depth of field, blur strength and Performance mode, with a live
+preview of the race. Changes apply at once and are remembered on this device.
+
+Every car has a whisper-quiet toy-kart engine in the spirit of Wii racers,
+synthesised in `src/engine-sound.ts` from the car's real revs, throttle and
+gears: a soft, hollow hum at half a V6's firing rate that putt-putts gently at
+low revs, opens a little on throttle and gives a tiny pop as the driver lifts or
+changes down. It sits beneath the music rather than over it. Like a racing game,
+the chase view listens just behind the followed car and the aerial view near
+what it looks at; like TV, the trackside cameras have microphones at the edge of
+the track. The nearest eight cars are heard with distance, stereo and Doppler,
+so a pass goes "neeeoowm". Engines are quiet while the replay is paused or
+faster than 8×.
 
 The soundtrack, “Bossa de Interlagos”, is an original 32-bar bossa nova written
 for this replay in the style of the Wii's channel music (and the race's home

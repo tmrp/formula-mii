@@ -64,12 +64,16 @@ try {
   };
   assert.equal((await state()).playing, false);
   await page.locator("#play").click();
+  // The cars' engines can be heard while the race plays.
+  await page.waitForFunction(() => window.__replay.engines > 0);
   await page.waitForTimeout(2200);
   assert.ok((await state()).time > 1);
   await page.locator("#play").click();
   const paused = (await state()).time;
   await page.waitForTimeout(500);
   assert.ok(Math.abs((await state()).time - paused) < 0.2);
+  // ...and fall silent when it pauses.
+  assert.equal((await state()).engines, 0);
   for (const mode of ["orbit", "chase", "onboard", "portrait", "trackside"]) {
     await page.locator(`[data-camera="${mode}"]`).click();
     assert.equal(
@@ -147,12 +151,19 @@ try {
   assert.equal(await music.getAttribute("aria-pressed"), "true");
   const volume = settings.locator("#music-volume");
   assert.equal(await volume.inputValue(), "6");
-  await settings.getByRole("button", { name: "Quieter" }).click();
+  await settings.getByRole("button", { name: "Music quieter" }).click();
   assert.equal(await volume.inputValue(), "5");
   await settings.locator("#music-volume-meter .meter-track").click({
     position: { x: 190, y: 12 },
   });
   assert.equal(await volume.inputValue(), "10");
+  const engineVolume = settings.locator("#engine-volume");
+  await choose("Engine sounds", "Off");
+  assert.equal(await engineVolume.isDisabled(), true);
+  await choose("Engine sounds", "On");
+  assert.equal(await engineVolume.inputValue(), "6");
+  await settings.getByRole("button", { name: "Engines louder" }).click();
+  assert.equal(await engineVolume.inputValue(), "7");
   await settings.getByRole("tab", { name: "Picture" }).click();
   assert.equal(
     await settings
@@ -224,7 +235,7 @@ try {
   await page.locator("#play").click();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, depth of field and settings.",
+    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, engine sounds, depth of field and settings.",
   );
 } finally {
   await browser?.close();

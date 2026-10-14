@@ -25,7 +25,9 @@ import {
   Volume2,
   TvMinimal,
 } from "lucide";
+import { Vector3 } from "three";
 import { ReplayEngine } from "./engine";
+import { EngineSounds } from "./engine-sound";
 import { ReplayScene } from "./scene";
 import { miiPortraits } from "./mii";
 import { installMusic, musicEnabled, onMusicChange, setMusic } from "./music";
@@ -163,6 +165,7 @@ setLcd(el("current-time"), "00:00", "Elapsed 00:00");
 setLcd(el("speed"), "0", "0 km/h");
 let meta: Metadata,
   engine: ReplayEngine,
+  engineSounds: EngineSounds,
   scene: ReplayScene,
   frame: Float32Array,
   portraits: string[] = [];
@@ -202,7 +205,7 @@ el("dialog").onclick = (e) => {
 el("about-button").onclick = () =>
   showDialog(
     "A real race in a little world.",
-    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. The track climbs and falls with its recorded elevation. The pit lane, lake, buildings, streets and grandstand sites come from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>, fitted to the telemetry, and the stands are full of Mii fans. Scenery is still stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p>The music, “Bossa de Interlagos”, is an original bossa nova written for this replay in the style of the Wii's channel music, and played live in your browser.</p><p class="muted">Map data © OpenStreetMap contributors, available under the ODbL. Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
+    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. The track climbs and falls with its recorded elevation. The pit lane, lake, buildings, streets and grandstand sites come from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>, fitted to the telemetry, and the stands are full of Mii fans. Scenery is still stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p>The music, “Bossa de Interlagos”, is an original bossa nova written for this replay in the style of the Wii's channel music, and played live in your browser, as are the little engines, which follow each car's real revs and throttle.</p><p class="muted">Map data © OpenStreetMap contributors, available under the ODbL. Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
   );
 el("help-button").onclick = () =>
   showDialog(
@@ -539,6 +542,7 @@ function updateUI() {
     portraits: portraits.filter(Boolean).length,
     spectators: scene.spectators,
     depthOfField: scene.blurring,
+    engines: engineSounds.heard,
   };
 }
 
@@ -638,6 +642,7 @@ async function init() {
     scene = new ReplayScene(el("scene"), meta, await venue);
     applyPicture(pictureSettings());
     portraits = miiPortraits(scene.miis, scene.atlas);
+    engineSounds = new EngineSounds(meta.drivers.length);
     scene.onStationChange = (name) => {
       el("station-name").textContent = name;
     };
@@ -690,9 +695,11 @@ async function init() {
     scene.update(frame, 0);
     icons();
     let renderedTime = -1;
+    const listener = new Vector3();
     const render = (now: number) => {
       const delta = Math.min((now - lastTick) / 1000, 1);
       lastTick = now;
+      const before = time;
       if (playing) {
         time = Math.min(meta.duration, time + delta * rate);
         if (time >= meta.duration) {
@@ -708,6 +715,14 @@ async function init() {
         settings.preview(scene.renderer.domElement);
       }
       renderedTime = time;
+      engineSounds.update(
+        frame,
+        scene.cars,
+        scene.camera,
+        scene.listener(listener),
+        playing ? time - before : 0,
+        rate,
+      );
       if (now - fpsStart > 1000) {
         fps = Math.round((frames * 1000) / (now - fpsStart));
         if (playing) scene.adaptPerformance(fps);

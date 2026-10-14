@@ -5,6 +5,13 @@ import {
   setMusic,
   setMusicVolume,
 } from "./music";
+import {
+  engineSoundEnabled,
+  engineSoundVolume,
+  onEngineSoundChange,
+  setEngineSound,
+  setEngineSoundVolume,
+} from "./engine-sound";
 import { setSounds, soundsEnabled } from "./wii";
 
 /** How the race looks; remembered between visits. */
@@ -86,7 +93,7 @@ export function installSettings(options: SettingsOptions) {
   dialog.id = "settings";
   dialog.className = "settings-dialog";
   dialog.setAttribute("aria-labelledby", "settings-title");
-  dialog.innerHTML = `<div class="dialog-header"><h2 id="settings-title">Settings</h2><div class="settings-tabs" role="tablist" aria-label="Settings pages"><button type="button" class="settings-tab" role="tab" id="settings-tab-sound" aria-controls="settings-sound">${options.icon("volume-2")}<span>Sound</span></button><button type="button" class="settings-tab" role="tab" id="settings-tab-picture" aria-controls="settings-picture">${options.icon("tv-minimal")}<span>Picture</span></button></div></div><div class="settings-body"><section role="tabpanel" id="settings-sound" aria-labelledby="settings-tab-sound">${choice("music", "Music", "“Bossa de Interlagos”, an original bossa nova in Wii style")}${meter("music-volume", "Music volume", 0, VOLUME_STEPS, "Quieter", "Louder")}${choice("sounds", "Menu sounds", "The little tick and pop of the Wii Menu")}</section><section role="tabpanel" id="settings-picture" aria-labelledby="settings-tab-picture"><div class="settings-preview"><canvas id="settings-preview" aria-hidden="true"></canvas><span>Live preview</span></div>${choice("dof", "Depth of field", "")}${meter("blur", "Blur strength", 1, BLUR_LEVELS, "Softer", "Stronger")}${choice("performance", "Performance mode", "Lower resolution, no shadows or blur, for phones and integrated graphics")}<div class="engine-status"><span class="green-dot"></span><span id="settings-status"></span></div></section></div><div class="dialog-actions"><button class="pill-button wide" id="settings-close">OK</button></div>`;
+  dialog.innerHTML = `<div class="dialog-header"><h2 id="settings-title">Settings</h2><div class="settings-tabs" role="tablist" aria-label="Settings pages"><button type="button" class="settings-tab" role="tab" id="settings-tab-sound" aria-controls="settings-sound">${options.icon("volume-2")}<span>Sound</span></button><button type="button" class="settings-tab" role="tab" id="settings-tab-picture" aria-controls="settings-picture">${options.icon("tv-minimal")}<span>Picture</span></button></div></div><div class="settings-body"><section role="tabpanel" id="settings-sound" aria-labelledby="settings-tab-sound">${choice("music", "Music", "“Bossa de Interlagos”, an original bossa nova in Wii style")}${meter("music-volume", "Music volume", 0, VOLUME_STEPS, "Music quieter", "Music louder")}${choice("engines", "Engine sounds", "A soft whisper of each Mii's engine, following its real revs and throttle")}${meter("engine-volume", "Engine volume", 0, VOLUME_STEPS, "Engines quieter", "Engines louder")}${choice("sounds", "Menu sounds", "The little tick and pop of the Wii Menu")}</section><section role="tabpanel" id="settings-picture" aria-labelledby="settings-tab-picture"><div class="settings-preview"><canvas id="settings-preview" aria-hidden="true"></canvas><span>Live preview</span></div>${choice("dof", "Depth of field", "")}${meter("blur", "Blur strength", 1, BLUR_LEVELS, "Softer", "Stronger")}${choice("performance", "Performance mode", "Lower resolution, no shadows or blur, for phones and integrated graphics")}<div class="engine-status"><span class="green-dot"></span><span id="settings-status"></span></div></section></div><div class="dialog-actions"><button class="pill-button wide" id="settings-close">OK</button></div>`;
   document.body.append(dialog);
   options.icons();
   const $ = <T extends HTMLElement>(selector: string) =>
@@ -117,6 +124,12 @@ export function installSettings(options: SettingsOptions) {
   const sync = () => {
     setChoice("music", musicEnabled());
     setMeter("music-volume", Math.round(musicVolume() * VOLUME_STEPS));
+    setChoice("engines", engineSoundEnabled());
+    setMeter(
+      "engine-volume",
+      Math.round(engineSoundVolume() * VOLUME_STEPS),
+      !engineSoundEnabled(),
+    );
     setChoice("sounds", soundsEnabled());
     setChoice("dof", picture.depthOfField);
     setChoice("performance", picture.performance);
@@ -134,6 +147,7 @@ export function installSettings(options: SettingsOptions) {
 
   const choose = (name: string, on: boolean) => {
     if (name === "music") setMusic(on);
+    else if (name === "engines") setEngineSound(on);
     else if (name === "sounds") setSounds(on);
     else if (name === "dof") setPicture({ depthOfField: on });
     else if (name === "performance") setPicture({ performance: on });
@@ -146,6 +160,7 @@ export function installSettings(options: SettingsOptions) {
   );
   const adjust = (id: string, value: number) => {
     if (id === "music-volume") setMusicVolume(value / VOLUME_STEPS);
+    else if (id === "engine-volume") setEngineSoundVolume(value / VOLUME_STEPS);
     else setPicture({ blur: value });
     sync();
   };
@@ -207,6 +222,7 @@ export function installSettings(options: SettingsOptions) {
     };
   });
   onMusicChange(sync);
+  onEngineSoundChange(sync);
   onPictureChange(sync);
   $("#settings-close").onclick = () => dialog.close();
   dialog.onclick = (e) => {

@@ -646,6 +646,28 @@ export class ReplayScene {
   get stationNames() {
     return this.stations.map((s) => s.name);
   }
+  /**
+   * Where the race is heard from. Like a racing game, the chase view listens
+   * just behind the car and the aerial view near what it looks at; like TV,
+   * a trackside camera has its microphone at the edge of the track.
+   */
+  listener(target: THREE.Vector3) {
+    const camera = this.camera.position;
+    if (this.mode === "orbit")
+      return target.lerpVectors(this.controls.target, camera, 0.4);
+    if (this.mode === "chase")
+      return target.lerpVectors(this.cars[this.focus].position, camera, 0.25);
+    const s =
+      this.mode === "trackside" &&
+      this.stations[this.station < 0 ? this.autoStation : this.station];
+    if (!s) return target.copy(camera);
+    const out = v(s.position.x - s.point.x, 0, s.position.z - s.point.z),
+      reach = out.length();
+    return target
+      .copy(s.point)
+      .addScaledVector(out.normalize(), Math.min(16, reach))
+      .setY(s.point.y + 2);
+  }
   update(frame: Float32Array, dt: number, force = true) {
     let visibleCount = 0,
       detailMask = 0;
