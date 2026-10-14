@@ -85,6 +85,9 @@ try {
   );
   await seek(28);
   await page.waitForFunction(() => window.__replay.tyreSmoke > 0);
+  // Down the back straight on lap 11, DRS opens and wind cones form.
+  await seek(1038);
+  await page.waitForFunction(() => window.__replay.windCones > 0);
   for (const mode of ["orbit", "chase", "onboard", "portrait", "trackside"]) {
     await page.locator(`[data-camera="${mode}"]`).click();
     assert.equal(
@@ -208,7 +211,8 @@ try {
       window.__replay.boosting +
         window.__replay.slipstreaming +
         window.__replay.throttleFlames +
-        window.__replay.tyreSmoke ===
+        window.__replay.tyreSmoke +
+        window.__replay.windCones ===
       0,
   );
   await choose("Race effects", "On");
@@ -258,7 +262,7 @@ try {
   await page.locator("#play").click();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, engine sounds, boost, slipstream, fire and tyre-smoke effects, depth of field and settings.",
+    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, engine sounds, boost, slipstream, fire, tyre-smoke and DRS wind-cone effects, depth of field and settings.",
   );
 } finally {
   await browser?.close();

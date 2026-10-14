@@ -5,6 +5,8 @@ use std::cell::RefCell;
 const INPUT: usize = 12;
 const OUTPUT: usize = 16;
 const MAX_DRIVERS: usize = 20;
+/// Seconds either side over which a car keeps to the recorded clock.
+const WINDOW: f64 = 4.;
 
 #[derive(Clone, Copy, Default)]
 struct Driver {
@@ -34,12 +36,12 @@ impl Engine {
         let p = d.offset + n * INPUT;
         &self.samples[p..p + INPUT]
     }
-    fn index(&self, d: Driver, t: f32) -> usize {
+    fn index(&self, d: Driver, t: f64) -> usize {
         let mut lo = 0;
         let mut hi = d.count;
         while lo < hi {
             let mid = (lo + hi) / 2;
-            if self.row(d, mid)[0] <= t {
+            if self.row(d, mid)[0] as f64 <= t {
                 lo = mid + 1;
             } else {
                 hi = mid;
@@ -47,22 +49,138 @@ impl Engine {
         }
         lo.saturating_sub(1)
     }
-    fn point(&self, d: Driver, t: f32) -> [f32; 3] {
+    /// Velocity through sample `i`, from its neighbours on either side,
+    /// ignoring a neighbour across a gap in the telemetry.
+    fn velocity(&self, d: Driver, i: usize) -> [f32; 3] {
+        let at = self.row(d, i)[0];
+        let prev = if i > 0 && at - self.row(d, i - 1)[0] <= 3. {
+            i - 1
+        } else {
+            i
+        };
+        let next = if i + 1 < d.count && self.row(d, i + 1)[0] - at <= 3. {
+            i + 1
+        } else {
+            i
+        };
+        let (a, b) = (self.row(d, prev), self.row(d, next));
+        let dt = b[0] - a[0];
+        if dt > 0. {
+            [(b[1] - a[1]) / dt, (b[2] - a[2]) / dt, (b[3] - a[3]) / dt]
+        } else {
+            [0.; 3]
+        }
+    }
+    fn point(&self, d: Driver, t: f64) -> [f32; 3] {
         let i = self.index(d, t);
         let a = self.row(d, i);
         let b = self.row(d, (i + 1).min(d.count - 1));
         let gap = b[0] - a[0];
-        // Never animate a fictional straight line across missing telemetry.
-        let f = if gap > 0. && gap <= 3. {
-            ((t - a[0]) / gap).clamp(0., 1.)
-        } else {
-            0.
+        // Never animate a fictional path across missing telemetry.
+        if !(gap > 0. && gap <= 3.) {
+            return [a[1], a[2], a[3]];
+        }
+        // A cubic through both locations whose velocity carries smoothly on
+        // through each one (Catmull-Rom), so a car never jolts at a sample.
+        let f = ((t - a[0] as f64) / gap as f64).clamp(0., 1.) as f32;
+        let (f2, f3) = (f * f, f * f * f);
+        let (va, vb) = (self.velocity(d, i), self.velocity(d, i + 1));
+        let mut p = [0.; 3];
+        for k in 0..3 {
+            p[k] = (2. * f3 - 3. * f2 + 1.) * a[k + 1]
+                + (f3 - 2. * f2 + f) * gap * va[k]
+                + (3. * f2 - 2. * f3) * b[k + 1]
+                + (f3 - f2) * gap * vb[k];
+        }
+        p
+    }
+    /// Cleans one driver's block of samples in place and returns how many
+    /// remain. OpenF1 stamps locations with a clock that is often 0.1 s off,
+    /// so plain interpolation makes a car surge and stall four times a
+    /// second, and now and then a location is out of step, behind or beside
+    /// where the car already was. Those locations are dropped, then each one
+    /// left is re-timed so the car covers its recorded path at its recorded
+    /// speed, keeping to the recorded clock on average over a few seconds.
+    fn smooth(&mut self, offset: usize, count: usize) -> usize {
+        let d = Driver {
+            offset,
+            count,
+            end: 0.,
+            retired: false,
         };
-        [
-            a[1] + (b[1] - a[1]) * f,
-            a[2] + (b[2] - a[2]) * f,
-            a[3] + (b[3] - a[3]) * f,
-        ]
+        let mut keep = Vec::with_capacity(count);
+        keep.push(0);
+        let (mut lo, mut hi) = (0, 0);
+        for i in 1..count {
+            let a = self.row(d, keep[keep.len() - 1]);
+            let c = self.row(d, i);
+            if a[4] > 30. && c[0] - a[0] <= 2. {
+                // A car on the move goes forward, within 75° of the way it
+                // was heading. That is taken from about a second either side,
+                // so a single stray location cannot turn it round.
+                while self.row(d, lo)[0] < a[0] - 1. {
+                    lo += 1;
+                }
+                while hi < count - 1 && self.row(d, hi)[0] < a[0] + 1. {
+                    hi += 1;
+                }
+                let (p, q) = (self.row(d, lo), self.row(d, hi));
+                let (dx, dy) = (q[1] - p[1], q[2] - p[2]);
+                if q[0] - p[0] <= 3.
+                    && dx.hypot(dy) > 1.
+                    && (c[1] - a[1]) * dx + (c[2] - a[2]) * dy
+                        < 0.26 * (c[1] - a[1]).hypot(c[2] - a[2]) * dx.hypot(dy)
+                {
+                    continue;
+                }
+            }
+            keep.push(i);
+        }
+        // How far ahead of the recorded clock each location was reached at
+        // the recorded speed; standing or crawling cars keep the clock.
+        let n = keep.len();
+        let mut drift = vec![0f64; n];
+        let mut clock = self.row(d, 0)[0] as f64;
+        for k in 1..n {
+            let (a, b) = (self.row(d, keep[k - 1]), self.row(d, keep[k]));
+            let dt = (b[0] - a[0]) as f64;
+            let speed = (a[4] + b[4]) as f64 / 7.2;
+            let distance = (b[1] - a[1]).hypot(b[2] - a[2]).hypot(b[3] - a[3]) as f64;
+            clock += if speed > 8. && dt <= 3. {
+                distance / speed
+            } else {
+                dt
+            };
+            drift[k] = clock - b[0] as f64;
+        }
+        // Apply only the quick part of that drift: less its average over
+        // WINDOW seconds either side, on the speed's clock so the correction
+        // spreads evenly however far apart the locations were stamped.
+        let mut sum = vec![0f64; n + 1];
+        for k in 0..n {
+            sum[k + 1] = sum[k] + drift[k];
+        }
+        let time = |k: usize| self.row(d, keep[k])[0] as f64 + drift[k];
+        let (mut lo, mut hi) = (0, 0);
+        let mut times = vec![0f64; n];
+        for k in 0..n {
+            while time(lo) < time(k) - WINDOW {
+                lo += 1;
+            }
+            while hi < n && time(hi) <= time(k) + WINDOW {
+                hi += 1;
+            }
+            times[k] = time(k) - (sum[hi] - sum[lo]) / (hi - lo) as f64;
+            if k > 0 {
+                times[k] = times[k].max(times[k - 1] + 0.01);
+            }
+        }
+        for (k, &i) in keep.iter().enumerate() {
+            let (from, to) = (offset + i * INPUT, offset + k * INPUT);
+            self.samples.copy_within(from..from + INPUT, to);
+            self.samples[to] = times[k] as f32;
+        }
+        n
     }
     /// Acceleration in m/s² from the recorded speed about half a second
     /// before sample `i`; zero across gaps in the telemetry.
@@ -80,7 +198,10 @@ impl Engine {
             0.
         }
     }
-    fn update(&mut self, t: f32) {
+    /// `time` is f64 so late in the race a car still moves evenly from one
+    /// frame to the next; f32 would step in half-millisecond units.
+    fn update(&mut self, time: f64) {
+        let t = time as f32;
         for n in 0..MAX_DRIVERS {
             let d = self.drivers[n];
             let o = n * OUTPUT;
@@ -88,7 +209,7 @@ impl Engine {
                 self.frame[o..o + OUTPUT].fill(0.);
                 continue;
             }
-            let i = self.index(d, t);
+            let i = self.index(d, time);
             let a = self.row(d, i);
             let next = self.row(d, (i + 1).min(d.count - 1));
             let first = self.row(d, 0)[0];
@@ -102,13 +223,17 @@ impl Engine {
             } else {
                 0.
             };
-            let sample_time = if d.retired { t.min(d.end) } else { t };
+            let sample_time = if d.retired {
+                time.min(d.end as f64)
+            } else {
+                time
+            };
             let p = self.point(d, sample_time);
             let before = self.point(d, sample_time - 0.4);
             let after = self.point(
                 d,
                 if d.retired {
-                    (sample_time + 0.4).min(d.end)
+                    (sample_time + 0.4).min(d.end as f64)
                 } else {
                     sample_time + 0.4
                 },
@@ -194,6 +319,7 @@ pub extern "C" fn configure_driver(
         {
             return 0;
         }
+        let count = e.smooth(offset, count);
         e.drivers[index] = Driver {
             offset,
             count,
@@ -204,7 +330,7 @@ pub extern "C" fn configure_driver(
     })
 }
 #[no_mangle]
-pub extern "C" fn render_frame(time: f32) -> *const f32 {
+pub extern "C" fn render_frame(time: f64) -> *const f32 {
     ENGINE.with(|e| {
         let mut e = e.borrow_mut();
         e.update(if time.is_finite() { time.max(0.) } else { 0. });
@@ -240,6 +366,57 @@ mod tests {
             retired: false,
         };
         e
+    }
+    fn sample(t: f32, x: f32) -> [f32; INPUT] {
+        [t, x, 0., 0., 180., 100., 0., 7., 11000., 0., 1., 1.]
+    }
+    fn smoothed(rows: &[[f32; INPUT]]) -> Engine {
+        let mut e = Engine::default();
+        rows.iter().for_each(|r| e.samples.extend(r));
+        let count = e.smooth(0, rows.len());
+        e.drivers[0] = Driver {
+            offset: 0,
+            count,
+            end: 1000.,
+            retired: false,
+        };
+        e
+    }
+    #[test]
+    fn evens_out_a_jittery_clock() {
+        // 50 m/s down a straight, located every 0.25 s but stamped up to
+        // 0.1 s off, as OpenF1 does.
+        let jitter = [0., 0.1, -0.06, 0.04, -0.1, 0.07, -0.02, 0.09];
+        let rows: Vec<_> = (0..200)
+            .map(|k| sample(k as f32 * 0.25 + jitter[k % 8], k as f32 * 12.5))
+            .collect();
+        let mut e = smoothed(&rows);
+        let mut last = 0.;
+        for frame in 600..2400 {
+            e.update(frame as f64 / 60.);
+            let speed = (e.frame[0] - last) * 60.;
+            assert!(frame == 600 || (speed - 50.).abs() < 2.5, "{speed} m/s");
+            last = e.frame[0];
+        }
+    }
+    #[test]
+    fn ignores_locations_out_of_step() {
+        let mut rows: Vec<_> = (0..40)
+            .map(|k| sample(k as f32 * 0.25, k as f32 * 12.5))
+            .collect();
+        // One location 30 m behind the car, another 8 m off to its side.
+        rows[20][1] -= 30.;
+        rows[30][1] = rows[29][1] + 1.;
+        rows[30][2] = 8.;
+        let mut e = smoothed(&rows);
+        assert_eq!(e.drivers[0].count, 38);
+        let mut last = 0.;
+        for frame in 0..600 {
+            e.update(frame as f64 / 60.);
+            assert!(e.frame[0] >= last, "the car never reverses");
+            assert!(e.frame[1].abs() < 0.01, "or swerves");
+            last = e.frame[0];
+        }
     }
     #[test]
     fn interpolates_real_samples() {

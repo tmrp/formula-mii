@@ -56,8 +56,9 @@ order; select another driver to continue following the race.
 
 ## Architecture and performance
 
-- **Rust → WebAssembly:** the complete sample buffer lives in WASM memory. Each
-  frame runs binary searches and interpolation for every driver, without
+- **Rust → WebAssembly:** the complete sample buffer lives in WASM memory and
+  is cleaned once at load (see [Fidelity](#fidelity)). Each frame runs binary
+  searches and smooth Catmull-Rom interpolation for every driver, without
   allocations. Random and backwards seeks work independently of previous frames.
   There is no Rust build service or backend requirement at runtime.
 - **Three.js / WebGL:** the renderer consumes one fixed 16-float record per
@@ -70,7 +71,7 @@ order; select another driver to continue following the race.
   with an optional performance mode.
 - **Compact data:** native gzip exports transfer about 6.9 MB of telemetry and
   metadata. The loader supports both HTTP gzip decoding and explicit browser
-  decompression. WASM is approximately 24 KB.
+  decompression. WASM is approximately 27 KB.
 - **Turso:** raw API responses and chunked export assets are stored in a
   persistent local Turso development database at
   `.cache/openf1/turso-replays.db`. The installed CLI was signed out, so this
@@ -116,9 +117,12 @@ tow is wrapped in the white wind lines of a kart slipstreaming. With the
 throttle flat out, the rear wheels burst into cartoon fire, tongues of flame
 with puffs breaking off and cooling as they rise; braking hard from above about
 80 km/h (OpenF1 reports the brake as simply on or off), puffy white smoke
-billows from the front tyres and drifts away behind. OpenF1 has no
-energy data, so the boost is an estimate: a car at full throttle that is still
-pulling hard (acceleration from the recorded speeds, worked out in Rust) is
+billows from the front tyres and drifts away behind. With DRS open (OpenF1's DRS
+field reads 10, 12 or 14), the car rides inside a see-through cone of rushing
+wind, rings of air sliding back from a point ahead of its nose; this 2025 race
+predates the 2026 low-drag straight-line mode, so DRS is the signal. OpenF1 has
+no energy data, so the boost is an estimate: a car at full throttle that is
+still pulling hard (acceleration from the recorded speeds, worked out in Rust) is
 shown deploying, and the boost fades as it tops out at the end of a straight, as
 real cars run out of deployment. The slipstream comes from the cars' recorded
 positions: within 60 m behind another car going the same way, nearly in line,
@@ -160,8 +164,10 @@ npm run test:browser
 ```
 
 The WASM integration check compares **111,860 driver frames** across the entire
-race against an independent sample lookup, checks retirements and reverse seeks,
-and reports a 10,000-frame interpolation benchmark. Browser checks run the
+race against an independent sample lookup, so every car stays on its recorded
+trace. It then plays the whole race at 60 fps, checking that no moving car goes
+backwards, snaps round or strays from its recorded speed, checks retirements
+and reverse seeks, and reports a 10,000-frame interpolation benchmark. Browser checks run the
 production preview in Chromium, verifying playback, the race finish/restart, lap
 seeks, all drivers and camera modes, trackside stations, mobile layout,
 fullscreen and keyboard controls. They save screenshots in ignored `artifacts/`.
@@ -184,8 +190,16 @@ cars and terrain follow the recorded elevation. The pit lane, lake, buildings,
 streets, woods and the three mapped main-straight grandstands come from
 OpenStreetMap, fitted to the reference lap within about 7 m; the stands at the
 corners are placed at Interlagos's spectator areas rather than surveyed, and
-building heights, trees and spectators are illustrative. Short recorded gaps are held and
-longer gaps hide cars rather than inventing a trajectory. Race start/finish and
+building heights, trees and spectators are illustrative. The eight trackside
+camera towers are placed so each sees the whole stretch of track the automatic
+director uses it for, over the buildings, crests and woods, clearing only the few
+trees that would stand in the way. OpenF1 stamps locations with a clock that
+wobbles by about a tenth of a second, and now and then delivers one behind or
+beside where the car already was. The engine drops those (189 of 423,520) and
+re-times the rest so each car covers its recorded path at its recorded speed,
+keeping to the recorded clock on average over a few seconds; cars therefore
+drive smoothly instead of surging, stalling or reversing. Short recorded gaps
+are held and longer gaps hide cars rather than inventing a trajectory. Race start/finish and
 retirement cutoffs are derived from OpenF1 timing, with documented timing
 precision in the data pipeline.
 

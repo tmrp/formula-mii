@@ -3,7 +3,8 @@ import * as THREE from "three";
 // Race effects in the manner of a Wii racer: a car using its battery gets a
 // Wii-blue electric trail and twinkling sparks, a car in another's tow gets
 // the white wind lines of a kart slipstreaming, the rear wheels burst into
-// cartoon fire flat out, and the front tyres smoke under hard braking.
+// cartoon fire flat out, the front tyres smoke under hard braking, and a car
+// with its rear-wing flap open (DRS) rides inside a cone of rushing wind.
 // OpenF1 has no energy data, so the boost is estimated from the throttle and
 // acceleration; the slipstream comes from where the cars are.
 
@@ -41,6 +42,16 @@ export function tyreSmokeLevel(frame: Float32Array, i: number) {
   const k = i * 16;
   if (!usable(frame, k) || frame[k + 6] < 99) return 0;
   return smooth(80, 160, frame[k + 4]);
+}
+
+/**
+ * A wind cone while the rear-wing flap is open. OpenF1's DRS field reads 10,
+ * 12 or 14 when it is open (8 means eligible but still closed). This 2025
+ * race predates the 2026 low-drag straight-line mode, so DRS is the signal.
+ */
+export function drsLevel(frame: Float32Array, i: number) {
+  const k = i * 16;
+  return usable(frame, k) && frame[k + 9] >= 10 ? 1 : 0;
 }
 
 /**
@@ -364,7 +375,56 @@ void main() {
   ${FOOTER}
 }`;
 
-// Geometry builders: a ribbon of `segments` steps, a quad of four corners.
+// The DRS wind cone: a see-through cone from a point ahead of the nose,
+// flaring back past the tail, bright at its edges, with rings of air sliding
+// back along it and streaks running its length.
+const CONE_VERTEX = /* glsl */ `
+${HEADER}
+varying float vEdge;
+// u runs from the point (0) to the open end (1); a goes around.
+vec3 conePoint(float u, float a) {
+  float r = 0.12 + 4.6 * pow(max(u, 0.0), 0.9);
+  float t = a * 6.28318;
+  return vec3(cos(t) * r * 1.2, 2.1 + sin(t) * r * 0.95, 10.0 - 17.0 * u);
+}
+void main() {
+  mat4 m = modelViewMatrix * instanceMatrix;
+  vec4 p = m * vec4(conePoint(aU.x, aU.y), 1.0);
+  vec3 du = (m * vec4(conePoint(aU.x + 0.01, aU.y), 1.0)).xyz - p.xyz;
+  vec3 da = (m * vec4(conePoint(aU.x, aU.y + 0.01), 1.0)).xyz - p.xyz;
+  vec3 n = normalize(cross(du, da) + 1e-6);
+  // Bright where the cone curves away from the camera, clear where it faces it.
+  vEdge = 1.0 - abs(dot(n, normalize(p.xyz)));
+  vClear = clearOfCamera(p);
+  vUv = aU;
+  vStrength = aStrength;
+  gl_Position = projectionMatrix * p;
+}`;
+
+const CONE_FRAGMENT = /* glsl */ `
+varying vec2 vUv;
+varying float vEdge;
+varying float vStrength;
+varying float vClear;
+uniform float time;
+uniform vec3 white;
+uniform vec3 blue;
+void main() {
+  float u = vUv.x;
+  float s = fract(u * 4.0 - time * 2.6);
+  float ring = smoothstep(0.0, 0.04, s) * (1.0 - smoothstep(0.1, 0.26, s));
+  float lane = pow(max(sin(vUv.y * 87.9646), 0.0), 30.0);
+  float dash = smoothstep(0.2, 0.5, fract(u * 2.0 - time * 3.4 + floor(vUv.y * 14.0) * 0.37));
+  float a = 0.03 + 0.3 * vEdge * vEdge + ring * (0.5 + 0.3 * vEdge) + 0.55 * lane * dash;
+  a *= smoothstep(0.0, 0.15, u) * (1.0 - smoothstep(0.7, 1.0, u));
+  a *= vStrength * vClear * 0.85;
+  if (a < 0.004) discard;
+  gl_FragColor = vec4(mix(white, blue, 0.35 * (1.0 - ring)), a);
+  ${FOOTER}
+}`;
+
+// Geometry builders: a ribbon of `segments` steps, a quad of four corners,
+// a cone of `rings` by `segments`.
 function ribbonVertices(
   segments: number,
   fx: [number, number],
@@ -383,6 +443,26 @@ function ribbonVertices(
       index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
     }
   }
+}
+function coneVertices(
+  rings: number,
+  segments: number,
+  u: number[],
+  ids: number[],
+  index: number[],
+) {
+  const base = u.length / 2,
+    row = segments + 1;
+  for (let r = 0; r <= rings; r++)
+    for (let s = 0; s <= segments; s++) {
+      u.push(r / rings, s / segments);
+      ids.push(0, 0);
+    }
+  for (let r = 0; r < rings; r++)
+    for (let s = 0; s < segments; s++) {
+      const a = base + r * row + s;
+      index.push(a, a + row, a + 1, a + 1, a + row, a + row + 1);
+    }
 }
 function quadVertices(
   fx: [number, number],
@@ -436,6 +516,7 @@ export class RaceEffects {
   private wind: Effect;
   private throttleFlames: Effect;
   private tyreSmoke: Effect;
+  private windCone: Effect;
   private targets: Float32Array;
   private time = { value: 0 };
   private enabled = true;
@@ -526,9 +607,23 @@ export class RaceEffects {
       SMOKE_FRAGMENT,
       { rise: 0.08, fall: 0.5 },
     );
+    this.windCone = effect(
+      (u, ids, index) => coneVertices(18, 36, u, ids, index),
+      CONE_VERTEX,
+      CONE_FRAGMENT,
+      { rise: 0.15, fall: 0.35 },
+    );
+    // Drawn before the other effects, so they show through it.
+    this.windCone.mesh.renderOrder = -1;
   }
   private get all() {
-    return [this.boost, this.wind, this.throttleFlames, this.tyreSmoke];
+    return [
+      this.boost,
+      this.wind,
+      this.throttleFlames,
+      this.tyreSmoke,
+      this.windCone,
+    ];
   }
   /** Off clears the cars at once, even while the replay is paused. */
   setEnabled(on: boolean) {
@@ -549,6 +644,7 @@ export class RaceEffects {
       slipstreaming: count(this.wind.levels),
       throttleFlames: count(this.throttleFlames.levels),
       tyreSmoke: count(this.tyreSmoke.levels),
+      windCones: count(this.windCone.levels),
     };
   }
   /**
@@ -574,6 +670,8 @@ export class RaceEffects {
     this.follow(this.throttleFlames, cars, dt);
     each(tyreSmokeLevel);
     this.follow(this.tyreSmoke, cars, dt);
+    each(drsLevel);
+    this.follow(this.windCone, cars, dt);
     if (this.enabled) slipstreamLevels(frame, this.count, this.targets);
     else this.targets.fill(0);
     this.follow(this.wind, cars, dt);

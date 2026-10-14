@@ -1270,10 +1270,9 @@ export function buildVenue(
     }
   }
 
-  // Trackside camera towers sit on the inside of each corner, looking across
-  // the track at the grandstands; the outside is the fallback when the lake or
-  // a stand is in the way. Towers rise clear of any building on their sightline,
-  // so the one on the finish straight stands on the pit roof.
+  // Trackside camera towers stand across from each corner, looking over the
+  // track at the grandstands, never over the lake or from inside a stand.
+  // Each is placed and raised to see the whole stretch it covers (see below).
   const buildingTop = (x: number, y: number) =>
     Math.max(
       0,
@@ -1291,97 +1290,21 @@ export function buildVenue(
         (f) => Math.hypot(f.x - p.x, f.z - p.z) < plan.rows * ROW + 12,
       ),
     );
-  const stations = STATIONS.map(([corner, name, fallback]) => {
-    const c = corners.get(corner);
-    const s = c
-      ? corner === "Arquibancadas"
-        ? c.to - 60
-        : c.at
-      : fallback * length;
-    const { point } = at(s),
-      before = at(s - 25).tangent,
-      after = at(s + 25).tangent;
-    const turn = after.clone().sub(before).dot(right(before));
-    const inward = right(at(s).tangent).multiplyScalar(turn > 0.05 ? 1 : -1);
-    const candidates = [55, 75, -55, -75].map((d) =>
-      point.clone().addScaledVector(inward, d),
-    );
-    const foot =
-      candidates.find((p) => {
-        if (standNear(p) || ground.nearest(p.x, p.z, true).distance < 30)
-          return false;
-        for (let t = 0; t <= 1; t += 0.1)
-          if (
-            venue.water.some((r) =>
-              inside(
-                p.x + (point.x - p.x) * t,
-                -(p.z + (point.z - p.z) * t),
-                r,
-              ),
-            )
-          )
-            return false;
-        return true;
-      }) ?? candidates[0];
-    foot.y = ground.height(foot.x, foot.z);
-    let lens = foot.y + 24;
-    for (let t = 0; t <= 0.6; t += 0.1) {
-      const x = foot.x + (point.x - foot.x) * t,
-        z = foot.z + (point.z - foot.z) * t;
-      lens = Math.max(lens, buildingTop(x, -z) + 9);
-    }
-    const tower = new THREE.Group();
-    tower.position.copy(foot);
-    const pole = lens - foot.y - 3;
-    box(tower, mat("#ffffff"), 0, pole / 2, 0, 2, pole, 2);
-    box(tower, mat("#34beed"), 0, pole + 0.5, 0, 5, 3, 3);
-    world.add(tower);
-    // The lens sits just ahead of the camera housing, facing the track.
-    const toward = point.clone().sub(foot).setY(0).normalize();
-    return {
-      position: foot.clone().addScaledVector(toward, 3.5).setY(lens),
-      name,
-      point,
-    };
-  });
-
-  // Trees: the mapped ones, the infield woods and a few across the grass.
-  const treePoints: THREE.Vector3[] = [];
-  const plant = (x: number, y: number) => {
-    if (
-      treePoints.length >= 900 ||
-      Math.hypot(x, y) > radius - 10 ||
-      blocked(x, y, 22)
-    )
-      return;
+  // Where trees can grow: the mapped ones, the infield woods and a few
+  // across the grass, clear of the circuit, its buildings and the stands.
+  // The trackside cameras are placed around them below.
+  const treeSpots: THREE.Vector3[] = [];
+  const spot = (x: number, y: number) => {
+    if (Math.hypot(x, y) > radius - 10 || blocked(x, y, 22)) return;
     if (
       plans.some((p) =>
         p.front.some((f) => Math.hypot(f.x - x, -f.z - y) < p.rows * ROW + 8),
       )
     )
       return;
-    const z = -y;
-    if (
-      stations.some((st) => {
-        const ax = st.position.x,
-          az = st.position.z,
-          dx = st.point.x - ax,
-          dz = st.point.z - az,
-          t = THREE.MathUtils.clamp(
-            ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz),
-            0,
-            1.6,
-          );
-        return (
-          Math.hypot(x - ax, z - az) < 70 ||
-          Math.hypot(x - ax - dx * t, z - az - dz * t) < 28 + t * 30
-        );
-      })
-    )
-      return;
-    treePoints.push(toWorld(x, y, ground.height(x, -y)));
+    treeSpots.push(toWorld(x, y, ground.height(x, -y)));
   };
-  venue.trees.forEach(([x, y]) => plant(x, y));
+  venue.trees.forEach(([x, y]) => spot(x, y));
   const scatter = (rings: XY[][], spacing: number) => {
     for (const ring of rings) {
       const xs = ring.map((p) => p[0]),
@@ -1390,18 +1313,190 @@ export function buildVenue(
         for (let y = Math.min(...ys); y < Math.max(...ys); y += spacing) {
           const px = x + (random() - 0.5) * spacing,
             py = y + (random() - 0.5) * spacing;
-          if (inside(px, py, ring)) plant(px, py);
+          if (inside(px, py, ring)) spot(px, py);
         }
     }
   };
   scatter(venue.forest, 15);
   scatter(venue.grass, 55);
   if (!venue.venue.length)
-    for (let i = 0; i < 900 && treePoints.length < 200; i++) {
+    for (let i = 0; i < 900 && treeSpots.length < 200; i++) {
       const a = random() * Math.PI * 2,
         d = Math.sqrt(random()) * radius * 0.93;
-      plant(Math.cos(a) * d, Math.sin(a) * d);
+      spot(Math.cos(a) * d, Math.sin(a) * d);
     }
+  // The tallest a tree can grow (27 m, 9 m in radius) over a point, from the
+  // spots in 20 m cells around it.
+  const cell = (x: number, z: number) =>
+    Math.floor(x / 20) * 4096 + Math.floor(z / 20);
+  const treeCells = new Map<number, THREE.Vector3[]>();
+  for (const t of treeSpots) {
+    const key = cell(t.x, t.z);
+    if (!treeCells.has(key)) treeCells.set(key, []);
+    treeCells.get(key)!.push(t);
+  }
+  const treeTop = (x: number, z: number) => {
+    let top = -Infinity;
+    for (let i = -20; i <= 20; i += 20)
+      for (let j = -20; j <= 20; j += 20)
+        for (const t of treeCells.get(cell(x + i, z + j)) ?? [])
+          if (Math.hypot(t.x - x, t.z - z) < 9.5) top = Math.max(top, t.y + 27);
+    return top;
+  };
+
+  // Each camera covers more than its corner: the director cuts to the
+  // nearest corner's camera and holds it until another is 60 m nearer, so
+  // a tower must see that whole stretch of track, over the buildings and the
+  // crests (the main straight climbs about 20 m).
+  const stationCorners = STATIONS.map(([corner, name, fallback]) => {
+    const c = corners.get(corner);
+    const s = c
+      ? corner === "Arquibancadas"
+        ? c.to - 60
+        : c.at
+      : fallback * length;
+    return { name, s, point: at(s).point };
+  });
+  const views = points
+    .filter((_, i) => i % 6 === 0)
+    .map((p) => p.clone().setY(p.y + 3));
+  const covered = stationCorners.map(() => [] as THREE.Vector3[]);
+  for (const view of views) {
+    const d = stationCorners.map((c) => c.point.distanceTo(view)),
+      nearest = Math.min(...d);
+    d.forEach((di, k) => di <= nearest + 60 && covered[k].push(view));
+  }
+  // How high a lens at `foot` must be to see `view` over the ground and
+  // buildings in between, and how high to see over the trees as well.
+  const lensFor = (foot: THREE.Vector3, view: THREE.Vector3) => {
+    let overBuildings = -Infinity,
+      overTrees = -Infinity;
+    for (let t = 0.05; t < 0.96; t += 0.05) {
+      const x = foot.x + (view.x - foot.x) * t,
+        z = foot.z + (view.z - foot.z) * t,
+        roof = buildingTop(x, -z),
+        top = Math.max(
+          ground.height(x, z) + 2,
+          roof > 0 ? roof + 4 : -Infinity,
+        ),
+        need = (h: number) => (h - view.y * t) / (1 - t);
+      overBuildings = Math.max(overBuildings, need(top));
+      overTrees = Math.max(overTrees, need(Math.max(top, treeTop(x, z) + 1)));
+    }
+    return [overBuildings, overTrees];
+  };
+  // The tree spots a camera at `lens` clears: those right around its tower,
+  // and any whose crown (at most 9 m in radius and 27 m tall) cuts a
+  // sightline to the track it covers.
+  const clears = (lens: THREE.Vector3, views: THREE.Vector3[]) => {
+    const out = new Set(
+      treeSpots.filter(({ x, z }) => Math.hypot(x - lens.x, z - lens.z) < 35),
+    );
+    for (const view of views) {
+      const dx = view.x - lens.x,
+        dz = view.z - lens.z,
+        span = Math.hypot(dx, dz);
+      for (let d = 0; d < span + 15; d += 15) {
+        const f = Math.min(d / span, 1);
+        for (let i = -20; i <= 20; i += 20)
+          for (let j = -20; j <= 20; j += 20)
+            for (const tree of treeCells.get(
+              cell(lens.x + dx * f + i, lens.z + dz * f + j),
+            ) ?? []) {
+              if (out.has(tree)) continue;
+              const u = THREE.MathUtils.clamp(
+                ((tree.x - lens.x) * dx + (tree.z - lens.z) * dz) /
+                  (span * span),
+                0,
+                1,
+              );
+              if (
+                Math.hypot(tree.x - lens.x - dx * u, tree.z - lens.z - dz * u) <
+                  9.5 &&
+                lens.y + (view.y - lens.y) * u < tree.y + 27
+              )
+                out.add(tree);
+            }
+      }
+    }
+    return out;
+  };
+  const TALLEST = 60;
+  const cleared = new Set<THREE.Vector3>();
+  const stations = stationCorners.map(({ name, s, point }, k) => {
+    const before = at(s - 25).tangent,
+      after = at(s + 25).tangent;
+    const turn = after.clone().sub(before).dot(right(before));
+    const inward = right(at(s).tangent).multiplyScalar(turn > 0.05 ? 1 : -1);
+    const along = at(s).tangent;
+    // Spots across from the corner, further back and along it, each with a
+    // tower just tall enough to see over the buildings (clearing the trees in
+    // its way) or over the trees as well. The best sees all of its stretch
+    // while losing the fewest trees for the least extra height, with a
+    // little preference for the original spots straight across.
+    const candidates = [55, 75, -55, -75, 95, -95].flatMap((d) =>
+      [0, -40, 40].map((a) =>
+        Object.assign(
+          point.clone().addScaledVector(inward, d).addScaledVector(along, a),
+          { penalty: a === 0 && Math.abs(d) < 90 ? 0 : 6 },
+        ),
+      ),
+    );
+    const usable = candidates.filter((p) => {
+      if (standNear(p) || ground.nearest(p.x, p.z, true).distance < 30)
+        return false;
+      for (let t = 0; t <= 1; t += 0.1)
+        if (
+          venue.water.some((r) =>
+            inside(p.x + (point.x - p.x) * t, -(p.z + (point.z - p.z) * t), r),
+          )
+        )
+          return false;
+      return true;
+    });
+    let best = {
+      foot: candidates[0].clone(),
+      lens: candidates[0].clone(),
+      clears: new Set<THREE.Vector3>(),
+      score: Infinity,
+    };
+    for (const foot of usable.length ? usable : [candidates[0]]) {
+      foot.y = ground.height(foot.x, foot.z);
+      const toward = point.clone().sub(foot).setY(0).normalize();
+      const needs = covered[k].map((view) => lensFor(foot, view)),
+        overBuildings = needs.map(([b]) => b);
+      for (const option of [overBuildings, needs.map(([, t]) => t)]) {
+        const height = Math.min(
+          foot.y + TALLEST,
+          Math.max(foot.y + 24, ...option.filter((n) => n < foot.y + TALLEST)),
+        );
+        const lens = foot.clone().addScaledVector(toward, 3.5).setY(height);
+        const lost = clears(lens, covered[k]);
+        const score =
+          overBuildings.filter((n) => n > height).length * 100 +
+          lost.size * 1.5 +
+          (height - foot.y - 24) +
+          foot.penalty;
+        if (score < best.score)
+          best = { foot: foot.clone(), lens, clears: lost, score };
+      }
+    }
+    const { foot, lens } = best;
+    best.clears.forEach((tree) => cleared.add(tree));
+    const tower = new THREE.Group();
+    tower.position.copy(foot);
+    const pole = lens.y - foot.y - 3;
+    box(tower, mat("#ffffff"), 0, pole / 2, 0, 2, pole, 2);
+    box(tower, mat("#34beed"), 0, pole + 0.5, 0, 5, 3, 3);
+    world.add(tower);
+    // The lens sits just ahead of the camera housing, facing the track.
+    return { position: lens, name, point };
+  });
+
+  // Trees: every spot that is not in a trackside camera's way.
+  const treePoints = treeSpots
+    .filter((tree) => !cleared.has(tree))
+    .slice(0, 900);
   const trunks = new THREE.InstancedMesh(
     new THREE.CylinderGeometry(1.3, 1.9, 10, 6),
     mat("#9a6a3c"),

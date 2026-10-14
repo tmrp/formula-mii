@@ -556,6 +556,9 @@ export class ReplayScene {
     this.controls.enabled = mode === "orbit";
     this.cameraSnap = true;
     this.dirty = true;
+    // A trackside lens never sees its own camera housing, just behind it.
+    this.camera.near = mode === "trackside" ? 8 : 1;
+    this.camera.updateProjectionMatrix();
     if (mode === "orbit") {
       this.camera.fov = 42;
       this.camera.updateProjectionMatrix();
