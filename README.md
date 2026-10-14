@@ -99,7 +99,15 @@ The interface follows the Wii Menu and Wii Shop Channel: the pinstriped
 background, channel-tile frames, glossy buttons with the blue pointer glow, the
 curved bottom bar with its segmented clock (race time) and date (race day), the
 Message Board (race control messages), the hand pointer and synthesised menu
-sounds, which can be turned off in Settings. Python
+sounds, which can be turned off in Settings.
+
+The soundtrack, “Bossa de Interlagos”, is an original 32-bar bossa nova written
+for this replay in the style of the Wii's channel music (and the race's home
+city): vibraphone, electric piano, bass and light percussion, synthesised live
+with Web Audio in `src/music.ts`, so there are no audio files and no Nintendo
+music. It starts on the first click or key press, since browsers only allow
+sound after an interaction, and can be turned off or down from the header or
+Settings. Python
 acquisition scripts use only the standard library.
 
 ## Verify

@@ -21,10 +21,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Mail,
+  Music,
 } from "lucide";
 import { ReplayEngine } from "./engine";
 import { ReplayScene } from "./scene";
 import { miiPortraits } from "./mii";
+import {
+  installMusic,
+  musicEnabled,
+  musicVolume,
+  onMusicChange,
+  setMusic,
+  setMusicVolume,
+} from "./music";
 import { EMPTY_VENUE, type Venue } from "./venue";
 import {
   bottomBar,
@@ -70,6 +79,7 @@ const icons = () =>
       ChevronLeft,
       ChevronRight,
       Mail,
+      Music,
     },
   });
 const esc = (s: unknown) =>
@@ -86,7 +96,7 @@ app.innerHTML = `
  <header class="header">
   <a class="brand" href="/" aria-label="Formula Mii home"><span class="brand-badge">${brandMii}</span><span class="brand-name">Formula Mii</span></a>
   <div class="header-center">A little world. A real race.</div>
-  <div class="header-actions"><button class="pill-button" id="about-button">${icon("info")}<span>About this replay</span></button><button class="round-button small" id="settings-button" aria-label="Replay settings">${icon("settings-2")}</button></div>
+  <div class="header-actions"><button class="pill-button" id="about-button">${icon("info")}<span>About this replay</span></button><button class="round-button small" id="music-button" aria-label="Music" aria-pressed="true">${icon("music")}</button><button class="round-button small" id="settings-button" aria-label="Replay settings">${icon("settings-2")}</button></div>
  </header>
  <main>
   <div class="page">
@@ -148,6 +158,7 @@ app.innerHTML = `
 `;
 icons();
 installMenuSounds();
+installMusic();
 bottomBar(document.getElementById("wii-bar")!);
 const el = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -194,7 +205,7 @@ el("dialog").onclick = (e) => {
 el("about-button").onclick = () =>
   showDialog(
     "A real race in a little world.",
-    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. The track climbs and falls with its recorded elevation. The pit lane, lake, buildings, streets and grandstand sites come from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>, fitted to the telemetry, and the stands are full of Mii fans. Scenery is still stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p class="muted">Map data © OpenStreetMap contributors, available under the ODbL. Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
+    `<p>Replay the entire <strong>2025 São Paulo Grand Prix</strong> with all 20 drivers. Their paths, speed, gears, laps, positions, and pit stints come from <a href="https://github.com/br-g/openf1" target="_blank" rel="noreferrer">OpenF1</a>.</p><p>Every driver is a Mii built from the Wii's own palettes and face parts, made to look like the real driver, in a racing suit of their team's nearest Mii favourite colour. The track climbs and falls with its recorded elevation. The pit lane, lake, buildings, streets and grandstand sites come from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>, fitted to the telemetry, and the stands are full of Mii fans. Scenery is still stylized; this is a telemetry reconstruction, rather than broadcast footage or a physics simulation.</p><div class="about-grid"><div><strong>20</strong><span>little drivers</span></div><div><strong>71</strong><span>real laps</span></div><div><strong>5</strong><span>camera views</span></div></div><p>OpenF1 locations are sampled at approximately 3.7 Hz. Rust WebAssembly interpolates their positions; longer data gaps are held and then hidden until samples resume. Classification and final crossing times are derived from OpenF1 timing.</p><p>Raw data and the exported replay are archived in a local <strong>Turso</strong> database. The browser loads an immutable bundle, so no database credentials or live API calls are needed.</p><p>The music, “Bossa de Interlagos”, is an original bossa nova written for this replay in the style of the Wii's channel music, and played live in your browser.</p><p class="muted">Map data © OpenStreetMap contributors, available under the ODbL. Independent fan project. Not affiliated with Formula 1 or Nintendo. Latest completed Brazilian race available when acquired on 13 October 2026.</p>`,
   );
 el("help-button").onclick = () =>
   showDialog(
@@ -204,13 +215,31 @@ el("help-button").onclick = () =>
 el("settings-button").onclick = () => {
   showDialog(
     "Replay settings",
-    `<label class="setting-row"><span><strong>Performance mode</strong><small>Lower resolution and simplified shadows</small></span><input id="low-quality" class="wii-toggle" type="checkbox" ${scene?.quality === "low" ? "checked" : ""}></label><label class="setting-row"><span><strong>Menu sounds</strong><small>The little tick and pop of the Wii Menu</small></span><input id="sound-toggle" class="wii-toggle" type="checkbox" ${soundsEnabled() ? "checked" : ""}></label><p class="muted">Telemetry interpolation runs in Rust WebAssembly. The scene renders on your GPU and adapts its resolution when frames are slow. Performance mode reduces resolution further for phones and integrated graphics.</p><div class="engine-status"><span class="green-dot"></span><span>${ready ? `Rust/WASM ready · ${playing ? `${fps} FPS` : "Paused"} · ${scene.renderer.info.render.calls} draw calls` : "Preparing replay…"}</span></div>`,
+    `<label class="setting-row"><span><strong>Performance mode</strong><small>Lower resolution and simplified shadows</small></span><input id="low-quality" class="wii-toggle" type="checkbox" ${scene?.quality === "low" ? "checked" : ""}></label><label class="setting-row"><span><strong>Music</strong><small>“Bossa de Interlagos”, an original bossa nova in Wii style</small></span><input id="music-toggle" class="wii-toggle" type="checkbox" ${musicEnabled() ? "checked" : ""}></label><label class="setting-row"><span><strong>Music volume</strong></span><input id="music-volume" class="wii-slider" type="range" min="0" max="1" step="0.05" value="${musicVolume()}" aria-label="Music volume"></label><label class="setting-row"><span><strong>Menu sounds</strong><small>The little tick and pop of the Wii Menu</small></span><input id="sound-toggle" class="wii-toggle" type="checkbox" ${soundsEnabled() ? "checked" : ""}></label><p class="muted">Telemetry interpolation runs in Rust WebAssembly. The scene renders on your GPU and adapts its resolution when frames are slow. Performance mode reduces resolution further for phones and integrated graphics.</p><div class="engine-status"><span class="green-dot"></span><span>${ready ? `Rust/WASM ready · ${playing ? `${fps} FPS` : "Paused"} · ${scene.renderer.info.render.calls} draw calls` : "Preparing replay…"}</span></div>`,
   );
   el<HTMLInputElement>("low-quality").onchange = (e) =>
     scene?.setQuality((e.target as HTMLInputElement).checked);
   el<HTMLInputElement>("sound-toggle").onchange = (e) =>
     setSounds((e.target as HTMLInputElement).checked);
+  el<HTMLInputElement>("music-toggle").onchange = (e) =>
+    setMusic((e.target as HTMLInputElement).checked);
+  el<HTMLInputElement>("music-volume").oninput = (e) =>
+    setMusicVolume(Number((e.target as HTMLInputElement).value));
 };
+function showMusicState(on: boolean) {
+  el("music-button").setAttribute("aria-pressed", String(on));
+  el("music-button").setAttribute(
+    "aria-label",
+    on ? "Turn music off" : "Turn music on",
+  );
+  const toggle = document.getElementById(
+    "music-toggle",
+  ) as HTMLInputElement | null;
+  if (toggle) toggle.checked = on;
+}
+showMusicState(musicEnabled());
+onMusicChange(showMusicState);
+el("music-button").onclick = () => setMusic(!musicEnabled());
 // The Wii Message Board, as race control: every message issued so far.
 function raceMessages() {
   return meta.events.filter((e) => e.time >= 0 && e.time <= time);

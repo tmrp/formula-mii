@@ -95,15 +95,21 @@ export function setSounds(on: boolean) {
     // Not remembered, but still applied.
   }
 }
-function context() {
-  if (!soundOn) return;
+/** The page's one AudioContext, shared with the music; created and resumed on demand. */
+export function audioContext(resume = true) {
   try {
     audio ??= new AudioContext();
   } catch {
     return;
   }
-  if (audio.state === "suspended") void audio.resume().catch(() => {});
-  return audio.state === "running" ? audio : undefined;
+  if (resume && audio.state === "suspended")
+    void audio.resume().catch(() => {});
+  return audio;
+}
+function context() {
+  if (!soundOn) return;
+  const ctx = audioContext();
+  return ctx?.state === "running" ? ctx : undefined;
 }
 function blip(
   from: number,

@@ -122,6 +122,13 @@ try {
   await page.waitForTimeout(200);
   assert.ok((await state()).time < 100);
   await page.locator("#play").click();
+  // Music toggles off and back on from the header.
+  const music = page.locator("#music-button");
+  assert.equal(await music.getAttribute("aria-pressed"), "true");
+  await music.click();
+  assert.equal(await music.getAttribute("aria-pressed"), "false");
+  await music.click();
+  assert.equal(await music.getAttribute("aria-pressed"), "true");
   await page.locator("#settings-button").click();
   await page.locator("#low-quality").check();
   await page.locator("#dialog-close").click();
@@ -164,7 +171,7 @@ try {
   await page.locator("#play").click();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen and settings.",
+    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music and settings.",
   );
 } finally {
   await browser?.close();

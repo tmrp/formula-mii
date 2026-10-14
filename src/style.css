@@ -245,6 +245,58 @@ kbd {
   width: 19px;
   height: 19px;
 }
+/* Music on/off: a slash through the note when it's off. */
+#music-button {
+  position: relative;
+}
+#music-button[aria-pressed="false"] {
+  color: var(--faint);
+}
+#music-button[aria-pressed="false"]::after {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: #8d8d8d;
+  box-shadow: 0 0 0 1.5px #ffffff;
+  transform: rotate(-45deg);
+}
+/* A smaller Wii slider, for settings. */
+.wii-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 160px;
+  height: 12px;
+  margin: 0;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 2px solid #c9c9c9;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.5),
+      rgba(255, 255, 255, 0) 60%
+    ),
+    #dadada;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.wii-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #ffffff, #e0e0e0);
+  border: 3px solid var(--wii);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+.wii-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #ffffff, #e0e0e0);
+  border: 3px solid var(--wii);
+}
 /* The cyan page-turn arrows from the edges of the Wii Menu. */
 .wii-arrow {
   width: 22px;
