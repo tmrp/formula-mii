@@ -71,6 +71,10 @@ for (let t = 0; t <= Math.ceil(meta.duration); t++) {
       frame[i * 16 + 7] >= 0 && frame[i * 16 + 7] <= 8,
       "Gear is bounded",
     );
+    assert.ok(
+      Number.isFinite(frame[i * 16 + 15]),
+      "Acceleration is finite across every lap",
+    );
     if (d.retired && t > d.active_until + 8)
       assert.equal(frame[i * 16 + 12], 0, "Retired drivers disappear");
     checked++;

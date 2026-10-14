@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Metadata, CameraMode, Driver } from "./types";
 import { DepthOfField, type Focus } from "./dof";
+import { RaceEffects } from "./race-fx";
 import {
   earGeometry,
   faceAtlas,
@@ -243,6 +244,8 @@ export class ReplayScene {
   /** The soft Wii Sports background blur, when the user wants it. */
   depthOfField = true;
   private dof: DepthOfField;
+  /** Battery boost and slipstream effects. */
+  readonly effects: RaceEffects;
   private dofThrottled = false;
   private cameraSnap = true;
   private shadowLight: THREE.DirectionalLight;
@@ -371,6 +374,7 @@ export class ReplayScene {
     );
     this.blobShadows.frustumCulled = false;
     this.scene.add(this.blobShadows);
+    this.effects = new RaceEffects(this.scene, meta.drivers.length);
     this.focusRing = mesh(
       new THREE.RingGeometry(6.8, 7.4, 36),
       new THREE.MeshBasicMaterial({
@@ -594,6 +598,10 @@ export class ReplayScene {
     this.dof.strength = BLUR_SCALE[level - 1] ?? 1;
     this.dirty = true;
   }
+  setEffects(on: boolean) {
+    this.effects.setEnabled(on);
+    this.dirty = true;
+  }
   /** Draw again on the next frame, even when paused. */
   invalidate() {
     this.dirty = true;
@@ -727,6 +735,7 @@ export class ReplayScene {
       if (layer.cellAttribute) layer.cellAttribute.needsUpdate = true;
     }
     this.blobShadows.count = visibleCount;
+    this.effects.update(frame, this.cars, dt, force);
     this.blobShadows.instanceMatrix.needsUpdate = true;
     const car = this.cars[this.focus],
       pos = car.position;
@@ -840,6 +849,7 @@ export class ReplayScene {
       }
     });
     this.dof.dispose();
+    this.effects.dispose();
     this.renderer.dispose();
   }
 }

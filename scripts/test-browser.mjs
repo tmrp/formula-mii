@@ -74,6 +74,17 @@ try {
   assert.ok(Math.abs((await state()).time - paused) < 0.2);
   // ...and fall silent when it pauses.
   assert.equal((await state()).engines, 0);
+  // Into Turn 1 on the opening lap, cars are boosting and slipstreaming
+  // with the throttle flat out, then braking hard in clouds of tyre smoke.
+  await seek(20);
+  await page.waitForFunction(
+    () =>
+      window.__replay.boosting > 0 &&
+      window.__replay.slipstreaming > 0 &&
+      window.__replay.throttleFlames > 0,
+  );
+  await seek(28);
+  await page.waitForFunction(() => window.__replay.tyreSmoke > 0);
   for (const mode of ["orbit", "chase", "onboard", "portrait", "trackside"]) {
     await page.locator(`[data-camera="${mode}"]`).click();
     assert.equal(
@@ -191,6 +202,18 @@ try {
     const pixels = c.getContext("2d").getImageData(0, 0, c.width, c.height);
     return pixels.data.some((v, i) => i % 4 === 3 && v > 0);
   });
+  await choose("Race effects", "Off");
+  await page.waitForFunction(
+    () =>
+      window.__replay.boosting +
+        window.__replay.slipstreaming +
+        window.__replay.throttleFlames +
+        window.__replay.tyreSmoke ===
+      0,
+  );
+  await choose("Race effects", "On");
+  await seek(21);
+  await page.waitForFunction(() => window.__replay.slipstreaming > 0);
   await choose("Performance mode", "On");
   await settings.locator("#settings-close").click();
   assert.equal(await settings.getAttribute("open"), null);
@@ -235,7 +258,7 @@ try {
   await page.locator("#play").click();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, engine sounds, depth of field and settings.",
+    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, engine sounds, boost, slipstream, fire and tyre-smoke effects, depth of field and settings.",
   );
 } finally {
   await browser?.close();

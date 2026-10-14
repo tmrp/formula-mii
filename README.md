@@ -48,7 +48,7 @@ npm run preview
 | Drag / scroll in aerial view | Orbit / zoom; right-drag to pan                    |
 | Speed selector               | 0.25× through 64× playback                         |
 | F / fullscreen button        | Fullscreen with playback controls                  |
-| Settings                     | Sound, engines, depth of field, Performance mode   |
+| Settings                     | Sound, engines, picture, effects, Performance mode |
 
 The standings, gaps, tyre compound, throttle/brake indicators, selected driver's
 speed and mini map follow the replay time. Retirements remain visible in the
@@ -82,7 +82,7 @@ order; select another driver to continue following the race.
 `src/scene.ts` owns rendering and cameras, `src/venue.ts` builds the circuit and
 its surroundings from `public/replay/venue.json`, `src/main.ts` owns the player UI,
 `src/mii.ts` builds the Miis, `src/wii.ts` draws the Wii Menu chrome, and
-`engine/src/lib.rs` owns interpolation and driver availability.
+`engine/src/lib.rs` owns interpolation, acceleration and driver availability.
 
 ## The Miis and the Wii look
 
@@ -109,10 +109,26 @@ depth, keeping in-focus pixels out of the blur so Miis never smear into the
 background. Its strength can be set or the effect turned off in Settings, and it
 is skipped in Performance mode.
 
+Cars racing hard get the effects of a Wii kart racer, drawn by `src/race-fx.ts`
+in one instanced draw each. A car using its battery trails a crackling Wii-blue
+streak, twinkling sparks and a pool of blue light on the road; a car in another's
+tow is wrapped in the white wind lines of a kart slipstreaming. With the
+throttle flat out, the rear wheels burst into cartoon fire, tongues of flame
+with puffs breaking off and cooling as they rise; braking hard from above about
+80 km/h (OpenF1 reports the brake as simply on or off), puffy white smoke
+billows from the front tyres and drifts away behind. OpenF1 has no
+energy data, so the boost is an estimate: a car at full throttle that is still
+pulling hard (acceleration from the recorded speeds, worked out in Rust) is
+shown deploying, and the boost fades as it tops out at the end of a straight, as
+real cars run out of deployment. The slipstream comes from the cars' recorded
+positions: within 60 m behind another car going the same way, nearly in line,
+above 150 km/h and on the throttle.
+
 Settings, behind the gear in the header, is laid out like Wii Settings: a Sound
 page for the music, the engines, their volumes and the menu sounds, and a
-Picture page for depth of field, blur strength and Performance mode, with a live
-preview of the race. Changes apply at once and are remembered on this device.
+Picture page for depth of field, blur strength, race effects and Performance
+mode, with a live preview of the race. Changes apply at once and are remembered
+on this device.
 
 Every car has a whisper-quiet toy-kart engine in the spirit of Wii racers,
 synthesised in `src/engine-sound.ts` from the car's real revs, throttle and

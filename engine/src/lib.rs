@@ -1,6 +1,6 @@
 //! Allocation-free replay hot path. OpenF1 input uses 12 f32s/sample.
 //! Output uses 16 f32s/driver: x,y,z,heading,speed,throttle,brake,gear,
-//! rpm,drs,position,lap,visible,gap_seconds,finished,reserved.
+//! rpm,drs,position,lap,visible,gap_seconds,finished,acceleration (m/s²).
 use std::cell::RefCell;
 const INPUT: usize = 12;
 const OUTPUT: usize = 16;
@@ -64,6 +64,22 @@ impl Engine {
             a[3] + (b[3] - a[3]) * f,
         ]
     }
+    /// Acceleration in m/s² from the recorded speed about half a second
+    /// before sample `i`; zero across gaps in the telemetry.
+    fn acceleration(&self, d: Driver, i: usize) -> f32 {
+        let a = self.row(d, i);
+        let mut j = i;
+        while j > 0 && i - j < 8 && a[0] - self.row(d, j)[0] < 0.45 {
+            j -= 1;
+        }
+        let b = self.row(d, j);
+        let dt = a[0] - b[0];
+        if dt >= 0.2 && dt <= 3. {
+            (a[4] - b[4]) / 3.6 / dt
+        } else {
+            0.
+        }
+    }
     fn update(&mut self, t: f32) {
         for n in 0..MAX_DRIVERS {
             let d = self.drivers[n];
@@ -116,6 +132,7 @@ impl Engine {
                 bearing
             };
             let metrics = [a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11]];
+            let acceleration = self.acceleration(d, i);
             let visible = t >= first - 5. && (!d.retired || t <= d.end + 8.) && gap < 10.;
             self.frame[o..o + OUTPUT].copy_from_slice(&[
                 p[0],
@@ -133,7 +150,7 @@ impl Engine {
                 if visible { 1. } else { 0. },
                 gap,
                 if t >= d.end { 1. } else { 0. },
-                0.,
+                acceleration,
             ]);
         }
     }
@@ -231,6 +248,16 @@ mod tests {
         assert_eq!(&e.frame[0..3], &[15., 30., 0.]);
         assert_eq!(e.frame[4], 200.);
         assert_eq!(e.frame[12], 1.);
+    }
+    #[test]
+    fn acceleration_from_recorded_speeds() {
+        let mut e = engine();
+        e.update(2.5);
+        assert_eq!(e.frame[15], 0.);
+        // 36 km/h faster over one second is 10 m/s².
+        e.samples[2 * INPUT + 4] = 236.;
+        e.update(2.5);
+        assert!((e.frame[15] - 10.).abs() < 0.001);
     }
     #[test]
     fn seek_is_independent_of_previous_frame() {
