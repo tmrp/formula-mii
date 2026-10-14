@@ -47,7 +47,10 @@ try {
   assert.equal(await page.locator(".driver-row").count(), 20);
   // The OpenStreetMap venue loaded, so the grandstands are full of Miis.
   assert.ok((await page.evaluate(() => window.__replay.spectators)) > 1000);
-  assert.equal(await page.locator("canvas").count(), 2);
+  // The scene and the track map; the settings preview is not counted.
+  assert.equal(await page.locator("canvas:not(#settings-preview)").count(), 2);
+  // Wii Sports depth of field is on by default.
+  assert.equal(await page.evaluate(() => window.__replay.depthOfField), true);
   const state = () => page.evaluate(() => window.__replay);
   const seek = async (t) => {
     await page.locator("#timeline").evaluate((e, value) => {
@@ -129,9 +132,57 @@ try {
   assert.equal(await music.getAttribute("aria-pressed"), "false");
   await music.click();
   assert.equal(await music.getAttribute("aria-pressed"), "true");
+  // The Settings modal: Sound and Picture pages that apply at once.
+  const settings = page.locator("#settings");
+  const choose = (group, value) =>
+    settings
+      .getByRole("radiogroup", { name: group })
+      .getByRole("radio", { name: value })
+      .check();
   await page.locator("#settings-button").click();
-  await page.locator("#low-quality").check();
-  await page.locator("#dialog-close").click();
+  assert.equal(await settings.getAttribute("open"), "");
+  await choose("Music", "Off");
+  assert.equal(await music.getAttribute("aria-pressed"), "false");
+  await choose("Music", "On");
+  assert.equal(await music.getAttribute("aria-pressed"), "true");
+  const volume = settings.locator("#music-volume");
+  assert.equal(await volume.inputValue(), "6");
+  await settings.getByRole("button", { name: "Quieter" }).click();
+  assert.equal(await volume.inputValue(), "5");
+  await settings.locator("#music-volume-meter .meter-track").click({
+    position: { x: 190, y: 12 },
+  });
+  assert.equal(await volume.inputValue(), "10");
+  await settings.getByRole("tab", { name: "Picture" }).click();
+  assert.equal(
+    await settings
+      .getByRole("tab", { name: "Picture" })
+      .getAttribute("aria-selected"),
+    "true",
+  );
+  await choose("Depth of field", "Off");
+  assert.equal(await settings.locator("#blur").isDisabled(), true);
+  await page.keyboard.press("Escape");
+  await seek(20);
+  assert.equal((await state()).depthOfField, false);
+  await page.locator("#settings-button").click();
+  await choose("Depth of field", "On");
+  const blur = settings.locator("#blur");
+  assert.equal(await blur.inputValue(), "3");
+  await settings.getByRole("button", { name: "Stronger" }).click();
+  assert.equal(await blur.inputValue(), "4");
+  await blur.focus();
+  await page.keyboard.press("ArrowLeft");
+  assert.equal(await blur.inputValue(), "3");
+  // The live preview copies the race into the modal.
+  await page.waitForFunction(() => {
+    const c = document.querySelector("#settings-preview");
+    const pixels = c.getContext("2d").getImageData(0, 0, c.width, c.height);
+    return pixels.data.some((v, i) => i % 4 === 3 && v > 0);
+  });
+  await choose("Performance mode", "On");
+  await settings.locator("#settings-close").click();
+  assert.equal(await settings.getAttribute("open"), null);
   await page.locator("#help-button").click();
   assert.match(await page.locator("#dialog").innerText(), /Space/);
   await page.locator("#dialog-close").click();
@@ -141,6 +192,8 @@ try {
   assert.equal((await state()).mode, "chase");
   await page.keyboard.press("ArrowRight");
   assert.ok((await state()).time >= 10);
+  // Performance mode drops the blur.
+  assert.equal((await state()).depthOfField, false);
   await page.keyboard.press("c");
   await page.waitForFunction(() => window.__replay.mode === "onboard");
   assert.equal((await state()).mode, "onboard");
@@ -171,7 +224,7 @@ try {
   await page.locator("#play").click();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music and settings.",
+    "PASS: Chromium desktop/mobile; venue and crowds, full race seek, all 20 drivers, all five views, eight trackside stations, play/pause, race end/restart, lap jumps, retirements, speed, shortcuts, fullscreen, music, depth of field and settings.",
   );
 } finally {
   await browser?.close();

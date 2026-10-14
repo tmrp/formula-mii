@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import type { Metadata, CameraMode, Driver } from "./types";
+import { DepthOfField, type Focus } from "./dof";
 import {
   earGeometry,
   faceAtlas,
@@ -213,6 +214,8 @@ function partColor(role: string, driver: Driver, mii: Mii) {
   return FIXED_COLORS[role] ?? "#ffffff";
 }
 
+const BLUR_SCALE = [0.45, 0.7, 1, 1.4, 1.9];
+
 interface CarLayer {
   mesh: THREE.InstancedMesh;
   /** Per driver; null when the driver does not use this part (another hair style). */
@@ -237,6 +240,10 @@ export class ReplayScene {
   focus = 0;
   station = -1;
   quality = "high";
+  /** The soft Wii Sports background blur, when the user wants it. */
+  depthOfField = true;
+  private dof: DepthOfField;
+  private dofThrottled = false;
   private cameraSnap = true;
   private shadowLight: THREE.DirectionalLight;
   private observer: ResizeObserver;
@@ -284,6 +291,9 @@ export class ReplayScene {
     // Neutral keeps the Mii palette and team colours true to their values.
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1;
+    // Depth of field draws in several passes; count them all.
+    this.renderer.info.autoReset = false;
+    this.dof = new DepthOfField(this.renderer);
     container.append(this.renderer.domElement);
     this.renderer.domElement.setAttribute(
       "aria-label",
@@ -560,6 +570,7 @@ export class ReplayScene {
       low ? Math.min(devicePixelRatio, 0.5) : Math.min(devicePixelRatio, 1.5),
     );
     this.renderer.shadowMap.enabled = !low;
+    this.dofThrottled = false;
     this.shadowLight.shadow.needsUpdate = true;
     this.resize();
     this.dirty = true;
@@ -571,7 +582,66 @@ export class ReplayScene {
     if (next >= ratio - 0.04) return;
     this.renderer.setPixelRatio(next);
     if (next < 0.8) this.renderer.shadowMap.enabled = false;
+    if (next < 0.6) this.dofThrottled = true;
     this.resize();
+  }
+  setDepthOfField(on: boolean) {
+    this.depthOfField = on;
+    this.dirty = true;
+  }
+  /** Blur strength from 1 (softest) to 5; 3 is the Wii Sports look. */
+  setBlurStrength(level: number) {
+    this.dof.strength = BLUR_SCALE[level - 1] ?? 1;
+    this.dirty = true;
+  }
+  /** Draw again on the next frame, even when paused. */
+  invalidate() {
+    this.dirty = true;
+  }
+  get blurring() {
+    return this.depthOfField && this.quality !== "low" && !this.dofThrottled;
+  }
+  // Where each camera focuses, and how quickly the scenery behind softens.
+  private lensFocus(pos: THREE.Vector3): Focus {
+    const camera = this.camera.position;
+    switch (this.mode) {
+      case "orbit":
+        // Only the far side of the island, like a tilt-shift miniature.
+        return {
+          distance: camera.distanceTo(this.controls.target),
+          farStart: 0.45,
+          farEnd: 0.9,
+          far: 0.85,
+        };
+      case "chase":
+        return {
+          distance: camera.distanceTo(pos),
+          farStart: 0.35,
+          farEnd: 0.85,
+          far: 1,
+        };
+      case "onboard":
+        return { distance: 45, farStart: 0.5, farEnd: 0.92, far: 0.8 };
+      case "portrait":
+        // A character-select shot: the Mii crisp, the circuit a soft wash.
+        return {
+          distance: camera.distanceTo(this.cameraTarget),
+          farStart: 0.12,
+          farEnd: 0.5,
+          far: 1,
+        };
+      default:
+        // A long trackside lens: shallow focus in front and behind.
+        return {
+          distance: camera.distanceTo(pos),
+          farStart: 0.1,
+          farEnd: 0.45,
+          far: 1,
+          nearStart: 0.2,
+          nearEnd: 0.7,
+          near: 0.9,
+        };
+    }
   }
   get stationNames() {
     return this.stations.map((s) => s.name);
@@ -718,7 +788,10 @@ export class ReplayScene {
     }
     if (force || this.dirty) {
       this.crowdTime.value = performance.now() / 1000;
-      this.renderer.render(this.scene, this.camera);
+      this.renderer.info.reset();
+      if (this.blurring)
+        this.dof.render(this.scene, this.camera, this.lensFocus(pos));
+      else this.renderer.render(this.scene, this.camera);
       this.dirty = false;
       return true;
     }
@@ -744,6 +817,7 @@ export class ReplayScene {
         materials.forEach((m) => m.dispose());
       }
     });
+    this.dof.dispose();
     this.renderer.dispose();
   }
 }

@@ -22,26 +22,21 @@ import {
   ChevronRight,
   Mail,
   Music,
+  Volume2,
+  TvMinimal,
 } from "lucide";
 import { ReplayEngine } from "./engine";
 import { ReplayScene } from "./scene";
 import { miiPortraits } from "./mii";
-import {
-  installMusic,
-  musicEnabled,
-  musicVolume,
-  onMusicChange,
-  setMusic,
-  setMusicVolume,
-} from "./music";
+import { installMusic, musicEnabled, onMusicChange, setMusic } from "./music";
 import { EMPTY_VENUE, type Venue } from "./venue";
 import {
-  bottomBar,
-  installMenuSounds,
-  setLcd,
-  setSounds,
-  soundsEnabled,
-} from "./wii";
+  installSettings,
+  onPictureChange,
+  pictureSettings,
+  type Picture,
+} from "./settings";
+import { bottomBar, installMenuSounds, setLcd } from "./wii";
 import {
   latest,
   clock,
@@ -80,6 +75,8 @@ const icons = () =>
       ChevronRight,
       Mail,
       Music,
+      Volume2,
+      TvMinimal,
     },
   });
 const esc = (s: unknown) =>
@@ -212,30 +209,39 @@ el("help-button").onclick = () =>
     "Take the controls.",
     `<div class="shortcut"><span>Play / pause</span><kbd>Space</kbd></div><div class="shortcut"><span>Seek 10 seconds</span><span><kbd>←</kbd> <kbd>→</kbd></span></div><div class="shortcut"><span>Previous / next lap</span><span><kbd>[</kbd> <kbd>]</kbd></span></div><div class="shortcut"><span>Switch camera</span><kbd>C</kbd></div><div class="shortcut"><span>Choose camera</span><kbd>1 — 5</kbd></div><div class="shortcut"><span>Fullscreen</span><kbd>F</kbd></div><p class="muted">In aerial view, drag to orbit, scroll to zoom, and right-drag to pan. Select any Mii in the race order to follow them.</p>`,
   );
-el("settings-button").onclick = () => {
-  showDialog(
-    "Replay settings",
-    `<label class="setting-row"><span><strong>Performance mode</strong><small>Lower resolution and simplified shadows</small></span><input id="low-quality" class="wii-toggle" type="checkbox" ${scene?.quality === "low" ? "checked" : ""}></label><label class="setting-row"><span><strong>Music</strong><small>“Bossa de Interlagos”, an original bossa nova in Wii style</small></span><input id="music-toggle" class="wii-toggle" type="checkbox" ${musicEnabled() ? "checked" : ""}></label><label class="setting-row"><span><strong>Music volume</strong></span><input id="music-volume" class="wii-slider" type="range" min="0" max="1" step="0.05" value="${musicVolume()}" aria-label="Music volume"></label><label class="setting-row"><span><strong>Menu sounds</strong><small>The little tick and pop of the Wii Menu</small></span><input id="sound-toggle" class="wii-toggle" type="checkbox" ${soundsEnabled() ? "checked" : ""}></label><p class="muted">Telemetry interpolation runs in Rust WebAssembly. The scene renders on your GPU and adapts its resolution when frames are slow. Performance mode reduces resolution further for phones and integrated graphics.</p><div class="engine-status"><span class="green-dot"></span><span>${ready ? `Rust/WASM ready · ${playing ? `${fps} FPS` : "Paused"} · ${scene.renderer.info.render.calls} draw calls` : "Preparing replay…"}</span></div>`,
-  );
-  el<HTMLInputElement>("low-quality").onchange = (e) =>
-    scene?.setQuality((e.target as HTMLInputElement).checked);
-  el<HTMLInputElement>("sound-toggle").onchange = (e) =>
-    setSounds((e.target as HTMLInputElement).checked);
-  el<HTMLInputElement>("music-toggle").onchange = (e) =>
-    setMusic((e.target as HTMLInputElement).checked);
-  el<HTMLInputElement>("music-volume").oninput = (e) =>
-    setMusicVolume(Number((e.target as HTMLInputElement).value));
-};
+const settings = installSettings({
+  icon,
+  icons,
+  status: () => {
+    if (!ready) return "Preparing replay…";
+    const picture = pictureSettings(),
+      paused = picture.depthOfField && !picture.performance && !scene.blurring;
+    return [
+      "Rust/WASM ready",
+      playing ? `${fps} FPS` : "Paused",
+      `${scene.renderer.info.render.calls} draw calls`,
+      paused ? "blur paused to keep frames smooth" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  },
+  refresh: () => scene?.invalidate(),
+});
+el("settings-button").onclick = () => settings.open();
+function applyPicture(picture: Picture) {
+  if (!scene) return;
+  scene.setDepthOfField(picture.depthOfField);
+  scene.setBlurStrength(picture.blur);
+  if ((scene.quality === "low") !== picture.performance)
+    scene.setQuality(picture.performance);
+}
+onPictureChange(applyPicture);
 function showMusicState(on: boolean) {
   el("music-button").setAttribute("aria-pressed", String(on));
   el("music-button").setAttribute(
     "aria-label",
     on ? "Turn music off" : "Turn music on",
   );
-  const toggle = document.getElementById(
-    "music-toggle",
-  ) as HTMLInputElement | null;
-  if (toggle) toggle.checked = on;
 }
 showMusicState(musicEnabled());
 onMusicChange(showMusicState);
@@ -365,7 +371,7 @@ el("fullscreen").onclick = () =>
 window.addEventListener("keydown", (e) => {
   if (
     !ready ||
-    el<HTMLDialogElement>("dialog").open ||
+    document.querySelector("dialog[open]") ||
     ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(
       (e.target as HTMLElement).tagName,
     ) ||
@@ -532,6 +538,7 @@ function updateUI() {
     visible: scene.cars.filter((c) => c.visible).length,
     portraits: portraits.filter(Boolean).length,
     spectators: scene.spectators,
+    depthOfField: scene.blurring,
   };
 }
 
@@ -629,6 +636,7 @@ async function init() {
       .catch(() => undefined);
     await new Promise((r) => setTimeout(r, 30));
     scene = new ReplayScene(el("scene"), meta, await venue);
+    applyPicture(pictureSettings());
     portraits = miiPortraits(scene.miis, scene.atlas);
     scene.onStationChange = (name) => {
       el("station-name").textContent = name;
@@ -695,7 +703,10 @@ async function init() {
         }
       }
       frame = engine.frame(time);
-      if (scene.update(frame, delta, time !== renderedTime)) frames++;
+      if (scene.update(frame, delta, time !== renderedTime)) {
+        frames++;
+        settings.preview(scene.renderer.domElement);
+      }
       renderedTime = time;
       if (now - fpsStart > 1000) {
         fps = Math.round((frames * 1000) / (now - fpsStart));

@@ -106,6 +106,9 @@ input:focus-visible {
 .driver-row,
 .speed-select,
 .keyboard-help,
+.settings-tab,
+.wii-choice span,
+.meter-button,
 kbd {
   background: linear-gradient(180deg, #ffffff 0%, #f7f7f7 46%, #e7e7e7 100%);
   border: 2px solid #d0d0d0;
@@ -124,7 +127,10 @@ kbd {
 .camera-option:hover,
 .driver-row:hover,
 .speed-select:not(:disabled):hover,
-.keyboard-help:hover {
+.keyboard-help:hover,
+.settings-tab:hover,
+.wii-choice label:hover input:not(:disabled) + span,
+.meter-button:not(:disabled):hover {
   border-color: var(--wii);
   box-shadow:
     var(--wii-glow),
@@ -135,7 +141,10 @@ kbd {
 .round-button:not(:disabled):active,
 .square-button:not(:disabled):active,
 .camera-option:active,
-.driver-row:active {
+.driver-row:active,
+.settings-tab:active,
+.wii-choice label:active input:not(:disabled) + span,
+.meter-button:not(:disabled):active {
   transform: scale(0.97);
 }
 /* Like "Wii Menu" and "Start" on a channel screen: a capsule with a blue rim
@@ -262,41 +271,6 @@ kbd {
   box-shadow: 0 0 0 1.5px #ffffff;
   transform: rotate(-45deg);
 }
-/* A smaller Wii slider, for settings. */
-.wii-slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 160px;
-  height: 12px;
-  margin: 0;
-  flex-shrink: 0;
-  border-radius: 999px;
-  border: 2px solid #c9c9c9;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.5),
-      rgba(255, 255, 255, 0) 60%
-    ),
-    #dadada;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-}
-.wii-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 30%, #ffffff, #e0e0e0);
-  border: 3px solid var(--wii);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-.wii-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 30%, #ffffff, #e0e0e0);
-  border: 3px solid var(--wii);
-}
 /* The cyan page-turn arrows from the edges of the Wii Menu. */
 .wii-arrow {
   width: 22px;
@@ -316,43 +290,6 @@ kbd {
 .wii-arrow.left:hover {
   transform: scale(-1.18, 1.18);
 }
-/* A Wii settings toggle. */
-.wii-toggle {
-  appearance: none;
-  -webkit-appearance: none;
-  position: relative;
-  width: 58px;
-  height: 32px;
-  margin: 0;
-  flex-shrink: 0;
-  border-radius: 999px;
-  border: 2px solid #c9c9c9;
-  background: linear-gradient(180deg, #d9d9d9, #ececec);
-  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.15);
-  transition:
-    background 0.15s,
-    border-color 0.15s;
-}
-.wii-toggle::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 50% 30%, #ffffff, #e2e2e2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: transform 0.18s var(--spring);
-}
-.wii-toggle:checked {
-  background: linear-gradient(180deg, #2fb4e6, #6ad6f7);
-  border-color: #1ea7df;
-}
-.wii-toggle:checked::after {
-  transform: translateX(26px);
-}
-
 /* ---- Channel tiles -------------------------------------------------- */
 .tile {
   background: #ffffff;
@@ -1609,6 +1546,189 @@ kbd {
   font-size: 13px;
   color: var(--muted);
 }
+/* ---- Settings: the Wii Settings pages -------------------------------- */
+/* Held near the top, so the tabs stay put while pages change height. */
+.settings-dialog {
+  max-width: 600px;
+  margin-top: max(16px, 7vh);
+}
+.settings-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  min-width: 132px;
+  justify-content: center;
+  padding: 0 20px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.settings-tab svg {
+  width: 18px;
+  height: 18px;
+  color: var(--wii-deep);
+}
+/* The selected page lights up like a selected camera. */
+.settings-tab[aria-selected="true"],
+.wii-choice input:checked + span {
+  background: linear-gradient(180deg, #8fe2fb 0%, #3cc2ef 48%, #19a7e0 100%);
+  border-color: #1aa3dc;
+  color: #ffffff;
+  text-shadow: 0 1px 1px rgba(0, 60, 90, 0.4);
+}
+.settings-tab[aria-selected="true"] svg {
+  color: #ffffff;
+}
+.settings-tab:focus-visible,
+.wii-choice input:focus-visible + span,
+.meter-track:has(input:focus-visible) {
+  outline: none;
+  border-color: var(--wii);
+  box-shadow: var(--wii-glow);
+}
+.settings-body {
+  padding: 6px 36px 4px;
+  max-height: calc(100vh - max(16px, 7vh) - 250px);
+  overflow-y: auto;
+}
+.settings-dialog .setting-row {
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+.settings-dialog .setting-row > span {
+  flex: 1 1 200px;
+}
+.wii-choice {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.wii-choice label {
+  position: relative;
+  display: flex;
+}
+/* The real radio button covers its Wii button, so taps land on it. */
+.wii-choice input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+}
+.wii-choice span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 78px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 500;
+}
+.wii-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+/* Round and grey, like the − and + on a Wii Remote. */
+.meter-button {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1;
+  color: #6b6b6b;
+}
+.meter-track {
+  position: relative;
+  width: 196px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 2px solid #d0d0d0;
+  background: #e6e6e6;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.12);
+  touch-action: none;
+  cursor:
+    url("/cursor-hand.svg") 14 2,
+    pointer;
+}
+.meter-track input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.meter-bars {
+  display: flex;
+  gap: 4px;
+}
+.meter-bars i {
+  flex: 1;
+  height: 22px;
+  border-radius: 5px;
+  background: #cdcdcd;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  transition: background 0.12s;
+}
+.meter-bars i.on {
+  background: linear-gradient(180deg, #8fe2fb 0%, #3cc2ef 50%, #19a7e0 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 6px rgba(52, 190, 237, 0.45);
+}
+.wii-meter.disabled,
+.wii-choice input:disabled + span {
+  opacity: 0.45;
+}
+.wii-meter.disabled .meter-track {
+  cursor: default;
+}
+/* The live race, framed like a channel tile. */
+.settings-preview {
+  position: relative;
+  aspect-ratio: 16 / 7;
+  margin: 8px 0 4px;
+  border-radius: 20px;
+  border: 4px solid #ffffff;
+  box-shadow: 0 0 0 2px #cfcfcf;
+  overflow: hidden;
+  background: #cdeefb;
+}
+.settings-preview canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.settings-preview span {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #d4d4d4;
+}
 .engine-status {
   font-size: 13px;
   color: var(--ink-soft);
@@ -2001,9 +2121,14 @@ kbd {
   }
   .dialog-header,
   #dialog-content,
+  .settings-body,
   .dialog-actions {
     padding-left: 22px;
     padding-right: 22px;
+  }
+  .settings-tab {
+    min-width: 0;
+    flex: 1;
   }
 }
 

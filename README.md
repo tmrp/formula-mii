@@ -101,6 +101,19 @@ curved bottom bar with its segmented clock (race time) and date (race day), the
 Message Board (race control messages), the hand pointer and synthesised menu
 sounds, which can be turned off in Settings.
 
+The race has the soft depth of field of Wii Sports: whoever the camera follows
+stays crisp while the scenery behind melts into a gentle blur, strongest in the
+Driver and Trackside views and only on the far horizon from the air. Like the
+Wii, `src/dof.ts` blurs a low-resolution copy of the frame and blends it back by
+depth, keeping in-focus pixels out of the blur so Miis never smear into the
+background. Its strength can be set or the effect turned off in Settings, and it
+is skipped in Performance mode.
+
+Settings, behind the gear in the header, is laid out like Wii Settings: a Sound
+page for the music, its volume and the menu sounds, and a Picture page for depth
+of field, blur strength and Performance mode, with a live preview of the race.
+Changes apply at once and are remembered on this device.
+
 The soundtrack, “Bossa de Interlagos”, is an original 32-bar bossa nova written
 for this replay in the style of the Wii's channel music (and the race's home
 city): vibraphone, electric piano, bass and light percussion, synthesised live
