@@ -87,7 +87,7 @@ export function box(
 ) {
   return mesh(new THREE.BoxGeometry(w, h, d), m, parent, x, y, z);
 }
-function textSprite(
+function textPanel(
   text: string,
   bg: string,
   fg: string,
@@ -106,9 +106,15 @@ function textSprite(
   ctx.fillText(text, 256, 83);
   const texture = new THREE.CanvasTexture(c);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-  s.scale.set(w, h, 1);
-  return s;
+  // Usually seen at a slant, from down the straight.
+  texture.anisotropy = 8;
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
 }
 function seeded(seed: number) {
   return () => {
@@ -972,9 +978,14 @@ export function buildVenue(
     box(gantry, white, -13, 10, 0, 1.5, 20, 2);
     box(gantry, white, 13, 10, 0, 1.5, 20, 2);
     box(gantry, mat("#34beed"), 0, 20, 0, 28, 5, 2);
-    const sign = textSprite("Formula Mii", "#ffffff", "#12a3dd", 24, 5);
-    sign.position.set(0, 20, 1.1);
-    gantry.add(sign);
+    // A panel on each face of the beam; a sprite would turn to the camera and
+    // cut through it.
+    const sign = textPanel("Formula Mii", "#ffffff", "#12a3dd", 24, 5);
+    sign.position.set(0, 20, 1.02);
+    const back = sign.clone();
+    back.position.z = -1.02;
+    back.rotation.y = Math.PI;
+    gantry.add(sign, back);
     for (let x = -8; x < 8; x += 2)
       for (let z = 0; z < 3; z++)
         box(
